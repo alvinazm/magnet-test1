@@ -1,0 +1,6 @@
+# Python 虚拟环境(见 docs/environment.md:不要把 .venv 提交到 Git)
+.venv/
+
+# macOS 系统文件
+.DS_Store
+**/.DS_Store
