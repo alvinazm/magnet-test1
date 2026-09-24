@@ -6,7 +6,7 @@
 确保文档示例 100% 由附件可复算。
 
 使用:
-    /Users/azm/MyProject/work/.venv/bin/python docs/specs/validate_lineage.py
+    /Users/azm/MyProject/work/.venv/bin/python docs/skill/validate_lineage.py
 
 输出:
     - 精确匹配(✓ 文档=附件数字)

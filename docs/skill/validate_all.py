@@ -5,12 +5,23 @@ Magnet 出题统一机审入口
 用途:一键运行所有机审检查,任何一项失败都返回非零退出码。
 
 使用:
-    .venv/bin/python docs/specs/validate_all.py
+    .venv/bin/python docs/skill/validate_all.py
+
+目录约定(见 docs/skill/README.md):
+    docs/skill/   出题工具箱:培训文档、工作流 SOP、写作规则、机审与自检脚本(可跨题复用)
+    docs/specs/   本题产物:任务说明、Query、评估表
+    docs/reviews/ 本题复盘:材料问题清单、M1/M2/M3 结果评估
 
 机审项:
-    1. 数据自检(附件完整性、计算公式一致性)
-    2. A 模块档位机审(17 条标准的字段完整、档位显式对应)
+    1. 数据自检(附件完整性、附件包合规、计算公式一致性、题目可解性断言、跨口径反证探针 L5)
+    2. A 模块档位机审(字段完整、档位显式对应)
     3. 附件名/Sheet 名一致性(文档引用与实际一致)
+    4. 引用完整性(所有《》引用必须写完整文件名 + 扩展名,见项目根目录 AGENTS.md)
+    5. 口径登记一致性(validate_calibers.py):每个口径在制度 / Query / 评估表三处是否都有锚点
+    6. 材料基线比对(报告性,不参与通过判定):列出材料相对基线的变化,确认"只改了预期的部分"
+
+说明:数据自检中的 L5 风险登记默认不阻断(真实材料允许存在冲突/缺失/异常,但须可披露);
+     如需把风险登记一并视为失败,运行数据自检时设置环境变量 MAGNET_STRICT_CHECKS=1。
 
 退出码:
     0 = 所有机审通过
@@ -24,13 +35,16 @@ from pathlib import Path
 
 WORK = Path("/Users/azm/MyProject/work")
 SPECS = WORK / "docs/specs"
+SKILL = WORK / "docs/skill"
 INPUT = WORK / "input"
-RUBRIC = SPECS / "05-evaluation-rubric.md"
+RUBRIC = SPECS / "step3-evaluation-rubric.md"
 
 
 def run_script(name: str) -> tuple:
     """以子进程方式运行机审脚本,返回 (返回码, 输出)"""
-    script = SPECS / name
+    script = SKILL / name
+    if not script.exists():                       # 兼容脚本仍放在 docs/specs/ 的情况
+        script = SPECS / name
     if not script.exists():
         return 127, f"脚本不存在: {script}"
     result = subprocess.run(
@@ -111,6 +125,50 @@ def check_naming_consistency() -> tuple:
     return 1, "\n".join(issues)
 
 
+def check_reference_completeness() -> tuple:
+    """
+    项目约束检查:所有《...》引用必须写完整文件名 + 扩展名
+    (不得用简称、别名,也不得把 Sheet 名当文件名)。
+
+    跳过:反例行(含 ❌ / ✗)、逐字引用(含"引文照录")、脚本中的正则示例。
+    """
+    targets = [
+        SPECS / "step1-task-brief.md",
+        SPECS / "step2-query.md",
+        SPECS / "step3-evaluation-rubric.md",
+        SKILL / "step3-writing-guide.md",
+        SKILL / "出题工作流.md",
+        WORK / "output/数据血缘说明.md",
+    ]
+    # 注意:docs/skill/rules1.md 与 rules2.md 是平台培训文档原文,按"逐字引用"处理,不纳入本检查
+    reviews_dir = WORK / "docs/reviews"
+    if reviews_dir.exists():
+        targets += [p for p in reviews_dir.glob("*.md") if p not in targets]
+
+    allowed_ext = (".xlsx", ".docx", ".md", ".py", ".csv", ".json")
+    skip_markers = ("❌", "✗", "引文照录", "re.findall", "re.sub", "{ref}")
+    issues = []
+    scanned = 0
+
+    for path in targets:
+        if not path.exists():
+            continue
+        scanned += 1
+        for lineno, line in enumerate(path.read_text().splitlines(), 1):
+            if any(m in line for m in skip_markers):
+                continue
+            for ref in re.findall(r"《([^》]+)》", line):
+                if not ref.endswith(allowed_ext):
+                    issues.append(
+                        f"  ✗ {path.relative_to(WORK)} 第 {lineno} 行:"
+                        f"《{ref}》缺少完整文件名或扩展名"
+                    )
+
+    if not issues:
+        return 0, f"  ✓ 已扫描 {scanned} 份文档:所有《》引用均为完整文件名(含扩展名)"
+    return 1, "\n".join(issues[:20])
+
+
 def main():
     print("=" * 75)
     print("Magnet 出题统一机审")
@@ -120,7 +178,7 @@ def main():
 
     # ============ 1. 数据自检 ============
     print("\n" + "=" * 75)
-    print("【1/3】数据自检(data-validation.py)")
+    print("【1/6】数据自检(data-validation.py)")
     print("=" * 75)
     rc, output = run_script("data-validation.py")
     # 只输出末尾 20 行(避免过长)
@@ -131,7 +189,7 @@ def main():
 
     # ============ 2. A 模块档位机审 ============
     print("\n" + "=" * 75)
-    print("【2/3】A 模块档位机审(validate_a_module_levels.py)")
+    print("【2/6】A 模块档位机审(validate_a_module_levels.py)")
     print("=" * 75)
     rc, output = run_script("validate_a_module_levels.py")
     # 只输出汇总
@@ -143,11 +201,37 @@ def main():
 
     # ============ 3. 附件名/Sheet 名一致性 ============
     print("\n" + "=" * 75)
-    print("【3/3】附件名/Sheet 名一致性(本脚本内置)")
+    print("【3/6】附件名/Sheet 名一致性(本脚本内置)")
     print("=" * 75)
     rc, output = check_naming_consistency()
     print(output)
     results.append(("附件名/Sheet 名一致性", rc))
+
+    # ============ 4. 引用完整性(项目约束) ============
+    print("\n" + "=" * 75)
+    print("【4/6】引用完整性检查(《》必须为完整文件名,见 AGENTS.md)")
+    print("=" * 75)
+    rc, output = check_reference_completeness()
+    print(output)
+    results.append(("引用完整性", rc))
+
+    # ============ 5. 口径登记一致性 ============
+    print("\n" + "=" * 75)
+    print("【5/6】口径登记一致性(validate_calibers.py)")
+    print("=" * 75)
+    rc, output = run_script("validate_calibers.py")
+    print(output.strip())
+    results.append(("口径登记一致性", rc))
+
+    # ============ 6. 材料基线比对(报告性,不计入通过判定) ============
+    print("\n" + "=" * 75)
+    print("【6/6】材料基线比对(validate_baseline.py,仅报告)")
+    print("=" * 75)
+    rc, output = run_script("validate_baseline.py")
+    print(output.strip())
+    print("  · 本节只报告材料相对基线的变化,不影响机审结论;")
+    print("    确认变化符合预期后,运行 `--update` 更新基线:")
+    print("    .venv/bin/python docs/skill/validate_baseline.py --update")
 
     # ============ 总汇总 ============
     print("\n" + "=" * 75)

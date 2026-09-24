@@ -2,6 +2,15 @@
 Magnet 出题 - 线下/线上零售渠道与门店策略附件生成器
 v3.1 - 2026-09-23
 
+v3.2 - 2026-09-24(按 docs/skill/出题工作流.md 的 L5 探针与培训文档标准修复):
+ - 修复 D1:活动明细改为由《渠道销售明细》订单按"渠道 + 活动日期区间 + SKU"聚合,
+   活动期间销售额与订单台账可逐笔勾稽;活动前销售额改用"非活动期日均 × 活动天数"基线
+ - 修复 D11:活动明细按 SKU 聚合后不再出现重复行;投放明细的投放项目同渠道当月消重
+ - 修复 D12:渠道月度费用"费用合计"改为先对各分项四舍五入再求和,消除 ±0.01 舍入差
+ - 新增活动期销售增量:22% 的订单日期定向落入本渠道活动窗口(独立随机源,不影响主随机流)
+ - 《渠道与门店管理策略》补充 4.5–4.12、6.1、7.1、7.2、7.5、7.6、9.4、9.7、9.8 条款,
+   声明无明细来源的汇总值、数据提取时点、比对容差、客单价口径与各字段语义
+
 v3.1 变更:
  - 删除《门店月度经营·去年同期到店销售额》字段;门店口径不再包含任何"门店增长/同店"概念
  - 《门店基础信息》的"是否同店口径"改为"面积是否调整"(是/否),租约备注同步改为"计划期内发生面积调整"
@@ -334,6 +343,16 @@ for i in range(1, 51):
     })
 df_activities = pd.DataFrame(activities)
 
+# 活动期的销售增量:把一部分订单日期定向落到该渠道的活动窗口内,使"活动前 vs 活动期间"
+# 的比较具有真实增量(而不是纯噪声)。使用独立随机源,不消耗主随机流,避免影响其他附件。
+activity_by_channel = {}
+for _, _act in df_activities.iterrows():
+    activity_by_channel.setdefault(_act['渠道ID'], []).append(
+        (_act['开始日期'], _act['结束日期'])
+    )
+rng_promo = random.Random(20260625)
+promo_order_share = 0.22          # 22% 的订单落在活动窗口内,形成可观测的活动增量
+
 # ===================== 1. 渠道销售明细 =====================
 print("生成 2026H1渠道销售明细.xlsx ...")
 member_ids = [f'M{str(i).zfill(6)}' for i in range(1, 2501)]
@@ -348,7 +367,11 @@ for idx in range(7500):
     if has_refund:
         order_date = rand_datetime(start_date, datetime(2026, 6, 5))
     else:
-        order_date = rand_datetime(start_date, end_date)
+        order_date = rand_datetime(start_date, end_date)      # 照旧消耗 1 次主随机数
+        windows = activity_by_channel.get(channel, [])
+        if windows and rng_promo.random() < promo_order_share:
+            ws, we = rng_promo.choice(windows)
+            order_date = ws + timedelta(days=rng_promo.randint(0, (we - ws).days))
 
     cat = random.choices(categories, weights=channel_category_weights[channel])[0]
     sku = random.choice(sellable_skus_by_cat[cat])
@@ -401,53 +424,83 @@ for idx in range(7500):
 df_orders = pd.DataFrame(orders)
 df_orders['净收入'] = df_orders['收入'] - df_orders['退款金额']
 
-# ---- 促销活动明细与效果(修复 15):活动销售额与该渠道当月收入挂钩,保证量级真实 ----
+# ---- 促销活动明细与效果(修复 D1/D11):活动明细直接由订单台账聚合,可与订单逐笔勾稽 ----
+# 口径(《渠道与门店管理策略》7.2):
+#   · 活动期间销售额 = 该渠道(活动绑定门店时为该门店)在活动起止日期内订单的收入合计;
+#   · 活动前销售额   = 活动开始前「等长窗口」的同口径收入合计;
+#   · 活动价 = 期间该 SKU 收入 ÷ 销量(加权成交价),原价取 SKU 标准标价。
 rev_by_ch_month = df_orders.groupby(['渠道ID', '月份'])['收入'].sum()
 cnt_by_ch_month = df_orders.groupby(['渠道ID', '月份']).size()
 aov_by_ch_month = (rev_by_ch_month / cnt_by_ch_month).round(2)
 
-details = []
+# 为保持随机流与上一版一致(其余 8 个附件数据不变),按旧逻辑的「两段式」顺序消耗同等数量的随机数:
+# 第一段:每个活动的 target_sales 与明细行抽样;第二段:每个活动的 uplift
 for _, act in df_activities.iterrows():
-    aid = act['活动ID']
-    ms = f"{act['结束日期'].year}-{act['结束日期'].month:02d}"
-    base_rev = float(rev_by_ch_month.get((act['渠道ID'], ms), 0.0))
-    # 一次活动的期间销售额约当该渠道当月收入的 15%-55%(活动之间可能重叠)
-    target_sales = base_rev * random.uniform(0.20, 0.60)
-    rows = []
+    random.uniform(0.20, 0.60)
     for _ in range(random.randint(5, 20)):
         cat = random.choices(categories, weights=channel_category_weights[act['渠道ID']])[0]
-        sku = random.choice(sellable_skus_by_cat[cat])
+        random.choice(sellable_skus_by_cat[cat])
+        random.uniform(0.80, 0.97)
+for _ in df_activities.iterrows():
+    random.uniform(0.40, 2.00)
+
+df_orders['订单日期'] = pd.to_datetime(df_orders['订单日期'])
+
+
+def _activity_orders(act, start, end):
+    """取活动窗口内该渠道的订单(活动清单的 `门店ID` 为发起门店,不改变聚合口径)。"""
+    return df_orders[(df_orders['渠道ID'] == act['渠道ID'])
+                     & (df_orders['订单日期'] >= start)
+                     & (df_orders['订单日期'] <= end)]
+
+
+# 活动前基线 = 该渠道「非活动期日均收入」× 活动天数(H1 内不属于该渠道任何活动窗口的日期)
+h1_days = pd.date_range(start_date, end_date, freq='D')
+baseline_daily = {}
+for ch in channel_ids:
+    act_days = set()
+    for ws, we in activity_by_channel.get(ch, []):
+        act_days |= set(pd.date_range(ws, we, freq='D'))
+    non_act_days = [d for d in h1_days if d not in act_days]
+    daily_rev = df_orders[df_orders['渠道ID'] == ch].groupby('订单日期')['收入'].sum()
+    baseline_daily[ch] = float(daily_rev.reindex(non_act_days).fillna(0).mean()) if non_act_days \
+        else float(daily_rev.mean())
+
+
+details, effects = [], []
+for _, act in df_activities.iterrows():
+    aid = act['活动ID']
+    start = pd.Timestamp(act['开始日期'])
+    end = pd.Timestamp(act['结束日期'])
+    span = (end - start).days + 1
+
+    during_sel = _activity_orders(act, start, end)
+    grp = during_sel.groupby('SKU').agg(
+        销量=('数量', 'sum'), 销售额=('收入', 'sum'), 商品成本=('商品成本', 'sum'),
+    ).reset_index()
+    for _, row in grp.iterrows():
+        sku = row['SKU']
         orig = sku_price[sku]
-        # 活动价不低于成本,折扣率 = 1 − 活动价 ÷ 原价
-        disc_price = round(min(orig, max(sku_cost[sku] * 1.12, orig * random.uniform(0.80, 0.97))), 2)
-        rows.append((sku, orig, disc_price))
-    price_sum = sum(r[2] for r in rows)
-    for sku, orig, disc_price in rows:
-        qty = max(1, int(round(target_sales * (disc_price / price_sum) / disc_price)))
-        sales = round(disc_price * qty, 2)
-        cost = round(sku_cost[sku] * qty, 2)
+        sales = round(float(row['销售额']), 2)
+        qty = int(row['销量'])
+        avg_price = round(sales / qty, 2) if qty else 0.0
         details.append({
             '活动ID': aid,
             'SKU': sku,
             '品类': sku_category[sku],
             '原价': orig,
-            '活动价': disc_price,
-            '折扣率': round(1 - disc_price / orig, 4),
+            '活动价': avg_price,
+            '折扣率': round(1 - avg_price / orig, 4),
             '销量': qty,
             '销售额': sales,
-            '毛利': round(sales - cost, 2),
+            '毛利': round(sales - float(row['商品成本']), 2),
         })
-df_details = pd.DataFrame(details)
 
-effects = []
-for _, act in df_activities.iterrows():
-    aid = act['活动ID']
-    sub = df_details[df_details['活动ID'] == aid]
-    during = round(sub['销售额'].sum(), 2)                     # 与活动明细严格一致
-    act_margin = (sub['毛利'].sum() / during) if during > 0 else 0.3
-    uplift = random.uniform(0.40, 2.00)
-    before = round(during / (1 + uplift), 2)
+    during = round(float(grp['销售额'].sum()), 2)              # 与活动明细严格一致
+    before = round(baseline_daily[act['渠道ID']] * span, 2)     # 非活动期日均 × 活动天数
     inc = round(during - before, 2)
+    during_cost = float(grp['商品成本'].sum())
+    act_margin = ((during - during_cost) / during) if during > 0 else 0.3
     inc_gross = round(inc * act_margin, 2)
     roi = round(inc_gross / act['实际费用'], 2) if act['实际费用'] > 0 else 0
     effects.append({
@@ -460,6 +513,7 @@ for _, act in df_activities.iterrows():
         '增量毛利': inc_gross,
         'ROI': roi,
     })
+df_details = pd.DataFrame(details)
 df_effects = pd.DataFrame(effects)
 
 # ---- 投放明细(修复 13):每月每渠道 5 条,合计 180 条 ----
@@ -489,6 +543,7 @@ for ch in channel_ids:
         amounts[-1] = round(ad_budget - sum(amounts[:-1]), 2)
         # 该渠道当月可归因订单上限(20%-45%),按 5 条投放均分,避免归因订单超过真实订单量
         cap_orders = max(1, int(ch_orders * random.uniform(0.20, 0.45) / 5))
+        month_rows = []
         for k in range(5):
             amount = amounts[k]
             ad_date = rand_datetime(m_start, m_end)
@@ -511,10 +566,11 @@ for ch in channel_ids:
             funnel_pay = int(add_cart * random.uniform(0.08, 0.22))
             pay_orders = max(0, min(funnel_pay, cap_orders))
             pay_amount = round(pay_orders * ch_aov * random.uniform(0.95, 1.05), 2)
-            投放.append({
+            proj_no = random.randint(1, 20)          # 保持与原实现相同的抽样位置与顺序
+            month_rows.append({
                 '日期': ad_date,
                 '渠道ID': ch,
-                '投放项目': f'项目{random.randint(1, 20)}',
+                '投放项目': proj_no,
                 '活动ID': activity_id,
                 '投放金额': amount,
                 '曝光': exposure,
@@ -524,6 +580,17 @@ for ch in channel_ids:
                 '支付金额': pay_amount,
                 '投放ROI': round(pay_amount / amount, 2) if amount > 0 else 0,
             })
+        # 同一渠道当月 5 个投放项目消重,避免出现重复的(日期,渠道,项目)组合
+        used_projects, projects = set(), []
+        for row in month_rows:
+            value = row['投放项目']
+            while value in used_projects:
+                value = value % 20 + 1
+            used_projects.add(value)
+            projects.append(value)
+        for row, value in zip(month_rows, projects):
+            row['投放项目'] = f'项目{value}'
+            投放.append(row)
 df_ad = pd.DataFrame(投放)
 
 # 渠道退款明细(修复 2):退款日期一律落在 H1 内
@@ -724,11 +791,14 @@ for ch in channel_ids:
         gross = round(net - cost, 2)
         cnt = int(order_cnt[(order_cnt['渠道ID'] == ch) & (order_cnt['月份'] == ms)]['订单量'].sum())
         ad = round(float(ad_month[(ad_month['渠道ID'] == ch) & (ad_month['月份'] == ms)]['广告费'].sum()), 2)
+        commission = round(commission, 2)
+        tech = round(tech, 2)
         payment = round(revenue * payment_rate[ctype], 2)
         fulfillment = round(revenue * fulfill_rate[ctype], 2)
         packaging = round(cnt * random.uniform(2.0, 5.0), 2)
         after_sale = round(refund * random.uniform(0.10, 0.20), 2)
         other = round(revenue * random.uniform(0.002, 0.006), 2)
+        # 先对各分项四舍五入,再求和,保证「费用合计 = 各分项之和」精确成立
         fee_sum = round(ad + commission + tech + payment + fulfillment + packaging + after_sale + other, 2)
         channel_fee.append({
             '月份': ms,
@@ -743,8 +813,8 @@ for ch in channel_ids:
             '订单量': cnt,
             '客单价': round(net / cnt, 2) if cnt else 0,
             '广告费': ad,
-            '平台佣金': round(commission, 2),
-            '技术服务费': round(tech, 2),
+            '平台佣金': commission,
+            '技术服务费': tech,
             '支付手续费': payment,
             '履约费': fulfillment,
             '包装费': packaging,
@@ -1000,23 +1070,55 @@ doc2.add_paragraph('4.4 租金口径:合同条款(租期、月租金、物业费
                   '《华东区门店租约汇总》为准;损益与经营分析(租售比、门店盈亏)以'
                   '《门店经营台账·门店费用》的"租金及物业费"为准,该字段 = 合同月租金 + 物业费。'
                   '两者不一致时按 4.3 标记待补,不得自行假设。')
+doc2.add_paragraph('4.5 租金口径补充:台账"租金及物业费"为合同基数(月租金 + 物业费),'
+                  '不含按租约"递增条款"产生的年度递增;涉及 2026H2 的租金测算,'
+                  '须依据租约递增条款与租期开始日推算的周年日另行测算。')
+doc2.add_paragraph('4.6 客单价口径:渠道客单价 = 净收入 ÷ 订单量;'
+                  '门店客单价 = 到店销售额 ÷ 订单数;两者分子口径不同,不可直接横向比较。')
+doc2.add_paragraph('4.7 到店业务口径:到店销售额、订单数、毛利额、进店客流、连带率、退货额、'
+                  '动销SKU数、缺货率、损耗率以《门店经营台账》汇总值为准,'
+                  '材料不提供到店订单级明细,不要求作订单级核验。')
+doc2.add_paragraph('4.8 费用口径:门店费用中"人力、营销、水电、履约包装、其他、折旧摊销"'
+                  '只到费用级,不得据以反推编制人数、资源用量或资产清单;'
+                  '渠道费用中"履约费、包装费、退货售后费、支付手续费、其他费用"'
+                  '按实际发生额披露,无费率规则,不作独立复算。')
+doc2.add_paragraph('4.9 损益范围:本次损益仅含渠道侧与门店侧两级,'
+                  '不含中心仓运营成本、干线物流成本与总部分摊。')
+doc2.add_paragraph('4.10 退款成本口径:全额退款订单的商品成本按不可回收处理,不作成本冲回。')
+doc2.add_paragraph('4.11 数据提取时点:本次数据的提取时点为 2026-06-25,'
+                  '2026-06 订单在 6 月之后发生的退款尚未入账;'
+                  '2026-06 的退款完整性不成立,该月退款率与渠道净收入只作参考,不得用于跨月排名。')
+doc2.add_paragraph('4.12 比对容差:金额类指标复算比对的容差为 ±0.01 元。')
 
 doc2.add_heading('5. 缺失与异常处理', level=1)
 doc2.add_paragraph('5.1 允许披露、待补、缩小范围、局部隔离、负向结论。')
 doc2.add_paragraph('5.2 不得虚构事实,不得用外部数据替代题内材料。')
 
 doc2.add_heading('6. 闭店与改造条件', level=1)
-doc2.add_paragraph('6.1 租约到期且连续 6 个月 D 级,可启动闭店评估。')
+doc2.add_paragraph('6.1 租约到期且连续 6 个月 D 级,可启动闭店评估。'
+                  '其中"到期"指租期结束日不晚于建议执行期末(2026-12-31);'
+                  '基准日前已到期但仍在营的门店,须先核实续约状态再行处置。')
 doc2.add_paragraph('6.2 租售比连续 3 个月 >35%,可转为前置仓或自提点。')
 doc2.add_paragraph('6.3 连续月度判定按当月指标计算,不得用半年均值替代。')
 doc2.add_paragraph('6.4 闭店成本包含租约约定的违约金,并纳入决策依据。')
 
 doc2.add_heading('7. 促销与投放效果口径', level=1)
-doc2.add_paragraph('7.1 活动 ROI = 增量毛利 ÷ 活动实际费用。')
+doc2.add_paragraph('7.1 活动 ROI = 增量毛利 ÷ 活动实际费用;'
+                  '分母"活动实际费用"指《促销活动记录》中该活动的实际费用,'
+                  '不含同期媒介投放;如需含投放的全成本口径,须另行测算并明确标注。')
 doc2.add_paragraph('7.2 增量销售额 = 活动期间销售额 − 活动前销售额;'
-                  '增量毛利 = 增量销售额 × 活动毛利率。')
+                  '增量毛利 = 增量销售额 × 活动毛利率。'
+                  '"活动期间销售额"为该渠道在活动起止日期内的订单收入合计(活动清单的"门店ID"'
+                  '为活动发起门店,不改变聚合口径);'
+                  '"活动前销售额"为该渠道"非活动期日均收入 × 活动天数",'
+                  '其中非活动期指 H1 内不属于该渠道任何活动窗口的日期;'
+                  '同一渠道存在并行活动时,同一笔订单会被多个活动重复计入期间销售额,须在分析中说明。')
 doc2.add_paragraph('7.3 投放 ROI = 投放带来的支付金额 ÷ 投放金额。')
 doc2.add_paragraph('7.4 折扣率 = 1 − 活动价 ÷ 原价;活动价不得低于单位成本。')
+doc2.add_paragraph('7.5 活动预算按季度审批:实际费用超预算 10% 以内的由营销负责人核准,'
+                  '超过 10% 的须报分管副总审批;超预算活动须在《异常与待核清单》中列示。')
+doc2.add_paragraph('7.6 平台佣金与技术服务费按退款前成交收入(即《渠道销售明细》的"收入"字段)计提,'
+                  '退款不改变已计提金额。')
 
 doc2.add_heading('8. 商品与品类等级', level=1)
 doc2.add_paragraph('8.1 SKU 毛利率 = (标准标价 − 单位成本) ÷ 标准标价。')
@@ -1029,11 +1131,18 @@ doc2.add_paragraph('9.1 会员注册渠道:线上渠道注册记 CH01-CH06;门�
 doc2.add_paragraph('9.2 会员状态以基准日 2026-06-30 计算:最近购买 ≤60 天为活跃,'
                   '61-120 天为沉睡,>120 天为流失;两表中流失口径一致。')
 doc2.add_paragraph('9.3 RFM 分由最近购买(R)、订单数(F)、累计消费(M)综合排名得出,1-5 分,5 分最高。')
-doc2.add_paragraph('9.4 跨渠道购买渠道数 = 该会员购买过的不同渠道数(含门店)。')
+doc2.add_paragraph('9.4 跨渠道购买渠道数 = 该会员购买过的不同渠道数(含门店);'
+                  'O2O 订单计入其渠道ID,不另计门店渠道。')
 doc2.add_paragraph('9.5 会员订单类型:线下(渠道ID 为空、门店ID 必填)、线上(渠道ID 必填、'
                   '门店ID 为空)、O2O(渠道ID 与门店ID 均必填)。')
 doc2.add_paragraph('9.6 会员累计消费以《会员订单》为口径;'
                   '《渠道销售明细》的会员标识仅用于渠道归因,不重复计入会员累计消费。')
+doc2.add_paragraph('9.7 "复购渠道"为该会员首购渠道之外、实际发生购买的其他渠道列表;'
+                  '同渠道复购不记入该字段;"复购渠道=无"表示没有首购渠道之外的购买,'
+                  '不等于该会员没有复购订单。')
+doc2.add_paragraph('9.8 会员订单与渠道销售明细为两套独立编号体系:'
+                  '会员订单用于会员口径统计,渠道销售明细用于渠道经营归因,两者不作逐笔勾稽;'
+                  '若需按月对照,须说明两表覆盖范围差异。')
 
 doc2.save(f'{OUTPUT_DIR}/渠道与门店管理策略.docx')
 print("  -> 完成")

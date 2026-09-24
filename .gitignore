@@ -4,3 +4,7 @@
 # macOS 系统文件
 .DS_Store
 **/.DS_Store
+
+# Python 编译缓存(机审脚本运行产生)
+__pycache__/
+*.pyc
