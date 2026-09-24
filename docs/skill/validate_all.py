@@ -66,6 +66,11 @@ def check_naming_consistency() -> tuple:
 
     content = RUBRIC.read_text()
 
+    # 模块 B / C 按培训文档 6.5、6.7 节要求必须写明模型编号(三家情况、红线涉及产物);
+    # 禁止词只在模块 A(以及前置说明)范围内检查。
+    module_b_start = content.find("## 模块 B")
+    a_scope = content if module_b_start < 0 else content[:module_b_start]
+
     # 1. 收集实际附件和 Sheet
     actual_files = {f.name for f in INPUT.iterdir()
                     if f.suffix in (".xlsx", ".docx")}
@@ -107,13 +112,13 @@ def check_naming_consistency() -> tuple:
     # 2c. 检查禁止词
     for forbidden in ["M1", "M2", "M3"]:
         # 排除误识别(在元数据说明里)
-        if forbidden in content:
+        if forbidden in a_scope:
             # 找到位置,看是否在"禁止词说明"上下文里
-            for m in re.finditer(re.escape(forbidden), content):
+            for m in re.finditer(re.escape(forbidden), a_scope):
                 # 看前后 50 字符
                 start = max(0, m.start() - 50)
-                end = min(len(content), m.end() + 50)
-                context = content[start:end]
+                end = min(len(a_scope), m.end() + 50)
+                context = a_scope[start:end]
                 # 如果上下文有"出现"或"禁止"字样,是合规说明
                 if any(kw in context for kw in ["出现", "禁止", "✓", "× 0"]):
                     continue
