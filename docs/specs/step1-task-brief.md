@@ -2,8 +2,8 @@
 
 > **对应培训文档**:`docs/skill/rules1.md`(v3.0)第 4.2 节「任务说明(原场景描述)怎么填」;
 > 附件要求见第 4.3 节「附件怎么准备」,流程与退回见第七章
-> **生成时间**:2026-09-23(v2.0,按 num.py v3.1 附件重写)
-> **数据版本**:num.py v3.1 生成,`docs/skill/data-validation.py` 113 项自检通过
+> **生成时间**:2026-09-23(v2.0,按 num.py v3.1 附件重写;2026-09-24 数据版本同步至 num.py v3.2)
+> **数据版本**:num.py v3.2 生成,`docs/skill/data-validation.py` L1–L4 129 项 + L5 15 条探针全部通过
 > **配套文件**:Query `docs/specs/step2-query.md` / 评估表 `docs/specs/step3-evaluation-rubric.md`
 
 ---
@@ -187,8 +187,8 @@
 
 ## 十、生成信息
 
-- 文档版本:v2.0(按 num.py v3.1 附件重写)
-- 数据版本:num.py v3.1
-- 自检状态:✅ 9 个附件数据自检 113 项全部通过(`docs/skill/data-validation.py`)
+- 文档版本:v2.1(2026-09-24:数据版本同步至 num.py v3.2,自检口径更新为 L1–L4 + L5)
+- 数据版本:num.py v3.2
+- 自检状态:✅ 9 个附件数据自检 L1–L4 129 项 + L5 15 条探针全部通过(`docs/skill/data-validation.py`)
 - 相对 v1.1 的主要变化:门店费用口径改为"租金及物业费";新增面积调整口径;删除历史版本中的门店可比口径类条款;口径同步至简化后的门店分级规则(坪效定级 + 租售比否决)
 - 下一步:基于本任务说明核对 Query(`docs/specs/step2-query.md`)与评估表(`docs/specs/step3-evaluation-rubric.md`)

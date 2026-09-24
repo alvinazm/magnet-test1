@@ -1,7 +1,7 @@
 Query 正式任务书 — 2026H2 渠道与门店经营策略
 
 对应培训文档:docs/skill/rules1.md(v3.0)第 5.1 节七要素 + 第 5.2 节专业领域知识注入 + 第 5.3 节简单 Query 与专业 Query 对比;附件要求见第 4.3 节
-配套文件:任务说明 docs/specs/step1-task-brief.md;数据版本 num.py v3.1(9 份材料)
+配套文件:任务说明 docs/specs/step1-task-brief.md;数据版本 num.py v3.2(9 份材料)
 版本:v2.3(纯文本格式;只保留七要素对应的 6 节正文,与平台 Query 模板结构一致)
 
 一、业务角色与委托关系
