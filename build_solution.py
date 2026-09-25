@@ -16,6 +16,7 @@
     + 《数据血缘说明.md》(逐指标说明分析逻辑、数据来源与口径)
 """
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -169,15 +170,16 @@ store["租约在H2内到期"] = [lease[s]["租期结束"] <= "2026-12-31" for s 
 
 
 def store_action(r):
+    # 取值必须落在 Query 交付物 2 规定的枚举内:维持 / 整改 / 转前置仓或自提点 / 闭店评估
     if r["分级"] == "D" and r["连续6个月D级"] and r["租约在H2内到期"]:
-        return "关停(启动闭店评估)"
+        return "闭店评估"
     if r["分级"] == "D":
-        return "转前置仓/自提点评估"
+        return "转前置仓或自提点"
     if r["分级"] == "C":
-        return "调改(降租谈判/品类优化)"
+        return "整改"
     if r["分级"] == "A":
-        return "保留并加大投入"
-    return "保留"
+        return "维持"
+    return "维持"
 
 
 store["调整建议"] = store.apply(store_action, axis=1)
@@ -538,6 +540,71 @@ for a, b, c in appendix:
     cells[1].text = b
     cells[2].text = c
 
+
+# ============================================================
+# 8c. 报告排版规范化(标题黑色 / 表格浅灰边框 + 表头填充 / 表头跨页重复)
+# ============================================================
+from docx.enum.table import WD_ALIGN_VERTICAL  # noqa: E402
+from docx.oxml import OxmlElement  # noqa: E402
+from docx.oxml.ns import qn  # noqa: E402
+from docx.shared import RGBColor  # noqa: E402
+
+BLACK = RGBColor(0x00, 0x00, 0x00)
+BORDER = "D9D9D9"
+HEADER_FILL = "D9D9D9"
+
+
+def _set_cell_borders(cell):
+    tcPr = cell._tc.get_or_add_tcPr()
+    borders = OxmlElement("w:tcBorders")
+    for edge in ("top", "left", "bottom", "right"):
+        el = OxmlElement(f"w:{edge}")
+        el.set(qn("w:val"), "single")
+        el.set(qn("w:sz"), "6")
+        el.set(qn("w:space"), "0")
+        el.set(qn("w:color"), BORDER)
+        borders.append(el)
+    tcPr.append(borders)
+
+
+def _shade(cell, fill):
+    tcPr = cell._tc.get_or_add_tcPr()
+    shd = OxmlElement("w:shd")
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:color"), "auto")
+    shd.set(qn("w:fill"), fill)
+    tcPr.append(shd)
+
+
+def _repeat_header(row):
+    trPr = row._tr.get_or_add_trPr()
+    el = OxmlElement("w:tblHeader")
+    el.set(qn("w:val"), "true")
+    trPr.append(el)
+
+
+def normalize_report(doc):
+    """标题一律黑色;表格用浅灰边框、表头浅灰填充黑字、单元格垂直居中、表头跨页重复。"""
+    for p in doc.paragraphs:
+        if p.style.name.startswith(("Heading", "Title")):
+            for run in p.runs:
+                run.font.color.rgb = BLACK
+    for tbl in doc.tables:
+        for r_i, row in enumerate(tbl.rows):
+            for cell in row.cells:
+                cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+                _set_cell_borders(cell)
+                if r_i == 0:
+                    _shade(cell, HEADER_FILL)
+                    for p in cell.paragraphs:
+                        for run in p.runs:
+                            run.font.color.rgb = BLACK
+                            run.font.bold = True
+        _repeat_header(tbl.rows[0])
+
+
+normalize_report(doc)
+
 doc.save(OUTPUT / "2026H2 渠道与门店经营策略报告.docx")
 print("已写出 Word 报告")
 
@@ -823,6 +890,14 @@ lineage = f"""# 数据血缘与指标口径说明
 """
 (OUTPUT / "数据血缘说明.md").write_text(lineage, encoding="utf-8")
 print("已写出 数据血缘说明.md")
+
+# ============================================================
+# 8b. 交付物工作簿自查区(Check 表 + 枚举数据验证)
+# ============================================================
+sys.path.insert(0, str(Path("docs/skill").resolve()))
+import add_workbook_checks  # noqa: E402
+
+add_workbook_checks.main([])
 
 # ============================================================
 # 9. 控制台摘要
