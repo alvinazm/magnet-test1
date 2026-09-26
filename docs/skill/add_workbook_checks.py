@@ -95,7 +95,7 @@ SPEC = {
     },
     "异常与待核清单.xlsx": {
         "sheet": "异常清单",
-        "n_rows": 10,
+        "n_rows": 19,
         "rows": [
             ("异常条数", "=COUNTA('异常清单'!A2:A100)", "材料自检范围内的异常条目数"),
             ("异常编号唯一", "=IF(COUNTA('异常清单'!A2:A100)=SUMPRODUCT(1/COUNTIF('异常清单'!A2:A100,'异常清单'!A2:A100)),\"唯一\",\"重复\")",
@@ -128,12 +128,15 @@ def build_check_sheet(wb, fname: str) -> None:
         c.fill = HEAD_FILL
     for label, formula, expect in spec["rows"]:
         ws.append([label, formula, expect])
+    data_ws = ws.parent[sheet_name]
+    # 幂等:先清掉该表已有的数据验证,避免重复注入
+    data_ws.data_validations.dataValidation = []
+    last = max(spec["n_rows"] + 1, 200)  # 预留扩展行,避免新增对象后验证范围不覆盖
     for col, formula_range in spec["dv"]:
         dv = DataValidation(type="list", formula1=formula_range, allow_blank=True, showDropDown=False)
         dv.errorTitle = "取值超出规定枚举"
         dv.error = "请使用规定枚举值"
-        ws.parent[sheet_name].add_data_validation(dv)
-        last = spec["n_rows"] + 1
+        data_ws.add_data_validation(dv)
         dv.add(f"{col}2:{col}{last}")
     ws.column_dimensions["A"].width = 46
     ws.column_dimensions["B"].width = 18

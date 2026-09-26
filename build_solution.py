@@ -314,6 +314,51 @@ anomalies = [
      "H2 预测与趋势判断", "中",
      "H2 目标以 H1 实际水平为基准并标注为估算;不做跨年趋势结论",
      "《2026H1门店经营台账.xlsx》数据粒度限制;《渠道与门店管理策略.docx》第 5.1 条"),
+    ("A-011", "时效性", "2026H1渠道销售明细.xlsx / 2026H1线上投放与平台费用.xlsx", "订单日期 / 退款日期 / 退款金额 / 净收入",
+     "数据提取时点为 2026-06-25,2026-06 订单在 6 月之后发生的退款尚未入账,6 月退款率与渠道净收入不完整。",
+     "6 月单月退款率、渠道净收入与 6 月活动效果;跨月排名结论", "高",
+     "披露 6 月口径限制,不以 6 月单月做跨月排名;财务 7 月完整关账后按订单号补录并重跑 6 月指标",
+     "《渠道与门店管理策略.docx》第 4.11 条(2026-06 退款完整性不成立)"),
+    ("A-012", "缺失", "2026H1门店经营台账.xlsx", "门店费用.人力/营销/水电/履约包装/其他/折旧摊销",
+     "门店费用仅到费用级,未提供编制人数、工时、班次与营销资源用量,无法把人工费用反推为人数或排班承诺。",
+     "门店人力与排班建议的量化程度", "中",
+     "人力建议只给方向与匹配逻辑,明细人数列为待补;由 HR/运营补充 42 店编制、在岗、工时与班次后重算",
+     "《渠道与门店管理策略.docx》第 4.8 条(费用只到费用级,不得据以反推编制)"),
+    ("A-013", "缺失", "任务输入", "H2 活动日历 / H2 促销总预算 / 渠道预算上限",
+     "材料只含 2026H1 已执行活动,未提供 H2 活动日历、促销总预算与集团已批准的渠道预算上限。",
+     "H2 促销节奏与渠道建议投入的性质", "高",
+     "H2 金额一律标注为建议值或条件性方案并写明前提;预算与日历补齐后按月重排",
+     "Query 六 交付物 4/5 的边界要求;《渠道与门店管理策略.docx》第 7.5 条(活动预算审批)"),
+    ("A-014", "口径不清", "2026H1渠道销售明细.xlsx / 渠道与门店管理策略.docx", "发货方式 / 渠道ID / 净收入 / 履约费",
+     "《渠道与门店管理策略.docx》第 3.2 条把即时配送订单表述为归属即时零售渠道,与数据的实现方式不完全一致:数据按 `渠道ID`(下单渠道)归集收入与费用,即时配送订单分布在 CH01–CH06。",
+     "即时零售渠道(CH06)的规模与履约费归属", "中",
+     "本报告采用「收入与各项费用一律按下单渠道(渠道ID)确认」的口径(与第 3.1 条按渠道归集一致、与数据实现一致),并在正文注明;若改按「即时配送全部归即时零售渠道」读法,CH06 净收入由 238,360.01 元升至约 645,245.94 元,其余渠道合计减少 406,885.93 元",
+     "《渠道与门店管理策略.docx》第 3.1–3.4 条;数据按 `渠道ID` 归集的事实"),
+    ("A-015", "口径不清", "渠道与门店管理策略.docx / 渠道资源再配置建议.xlsx", "销售费用率",
+     "销售费用率未在《渠道与门店管理策略.docx》中定义,属本报告自定补充指标。",
+     "6 个渠道的费用效率比较与阈值判断", "低",
+     "披露定义方法:销售费用率 = 渠道费用合计 ÷ 净收入(分母为净收入),6 个渠道使用同一分母;不作为制度既有口径引用",
+     "《渠道与门店管理策略.docx》全文未定义该指标;Query 五 允许自定补充指标但须披露定义"),
+    ("A-016", "缺失", "渠道与门店管理策略.docx / 门店分级与调整建议.xlsx", "第 6.2 条 / 店型 / 调整建议",
+     "第 6.2 条只规定租售比连续 3 个月 >35% 可转为前置仓或自提点,未规定店型本已为前置仓的门店再次触发时的动作。",
+     "S012、S023、S028 三家门店的处置动作", "中",
+     "对三家已为前置仓的门店,本报告采纳「保留前置仓形态、以面积压缩与租金重议为主,并在 Q3 末复评是否转为纯自提点」,并在正文写明依据;若管理层另有动作偏好,可按同一触发条件替换",
+     "《渠道与门店管理策略.docx》第 6.2 条(仅规定可转为);三店店型字段为前置仓"),
+    ("A-017", "口径不清", "2026H1促销活动记录.xlsx", "活动明细.活动价 / 销量 / 销售额",
+     "活动明细的活动价为加权成交价且仅保留 2 位小数,以单价乘销量的反算与销售额存在 ≤0.06 元的舍入差(480 行),属数据呈现精度而非数据错误。",
+     "活动明细的复算路径与活动毛利校验", "低",
+     "披露复算方向:以销售额 ÷ 销量 为准;不把舍入差登记为数据冲突;报告与交付物 4 的 ROI 采用《2026H1促销活动记录.xlsx》活动效果 Sheet 口径",
+     "《2026H1促销活动记录.xlsx》活动明细字段精度事实;《渠道与门店管理策略.docx》第 4.12 条容差仅适用金额类指标"),
+    ("A-018", "缺失", "SKU主数据.xlsx / 渠道与门店管理策略.docx", "状态 / 适销期",
+     "《渠道与门店管理策略.docx》第 8.3 条要求季节性 SKU 仅在适销期销售,但《SKU主数据.xlsx》未提供适销期字段,该条款不可核验。",
+     "季节性 SKU 的销售合规判断与选品季节性建议", "中",
+     "披露无法核验,不判定任何季节性 SKU 违规;季节性判断只作定性描述,待补充适销期字段后重算",
+     "《渠道与门店管理策略.docx》第 8.3 条;《SKU主数据.xlsx》字段清单无适销期"),
+    ("A-019", "缺失", "2026H1渠道销售明细.xlsx / 2026H1门店经营台账.xlsx", "配送时长 / 履约时效 / 配送半径 / 节点容量",
+     "《渠道与门店管理策略.docx》第 1.3 条要求即时零售渠道重点考核履约成本与时效,但材料无配送时长、准时率、半径与节点容量类字段。",
+     "即时零售渠道的时效考核、闭店后履约迁移的可行性判断", "中",
+     "时效只作定性描述或列为待补,不给出任何时效数值结论;运营在处置前补充同城容量与时效压测数据",
+     "《渠道与门店管理策略.docx》第 1.3 条;9 个附件字段清单中无时效类字段"),
 ]
 anomaly_df = pd.DataFrame(anomalies, columns=[
     "异常编号", "异常类别", "涉及文件", "涉及字段", "问题描述", "影响范围",
@@ -397,6 +442,13 @@ summary_points = [
 for s in summary_points:
     doc.add_paragraph(s, style="List Number")
 
+doc.add_paragraph(
+    f"【已确认事实】本报告全部关键数字来自 9 个附件,可回指文件、Sheet 与字段(见附录);"
+    f"《异常与待核清单.xlsx》共登记 {len(anomaly_df)} 条异常与待核事项,其中影响 H2 决策的高优先事项包括:"
+    f"6 月退款不完整、面积调整门店坪效口径、门店费用只到费用级、无 H2 活动日历与已批准预算上限。"
+    f"【待核事项】H2 全部金额为建议值或条件性方案,以集团预算审批与待核事项关闭为生效前提。"
+)
+
 doc.add_heading("第 1 章 渠道结构诊断与 H2 资源调整建议", level=1)
 doc.add_paragraph(
     f"2026H1 六个线上渠道合计净收入 {money(net_total)} 元,毛利 {money(gross_total)} 元,"
@@ -426,6 +478,43 @@ doc.add_paragraph(
     f"{len(ch[(ch['渠道净利'] < 0) & (ch['销售费用率'] >= 0.33)])} 个)收缩投入 15%,"
     f"重点是压缩低效投放而非降低销售规模;③ 其余亏损渠道维持投入,优先优化费用结构(调整人群定向、"
     f"降低退货售后与履约成本)。"
+)
+
+doc.add_paragraph("【分析判断】逐渠道诊断与 H2 动作(含依据与主要风险):")
+for _, r in ch.iterrows():
+    doc.add_paragraph(
+        f"{r['渠道名称']}({r['渠道ID']}):H1 净收入 {money(r['净收入'])} 元,毛利率 {pct(r['渠道毛利率'])},"
+        f"销售费用率 {pct(r['销售费用率'])},投放 ROI {r['投放ROI']:.2f},渠道净利 {money(r['渠道净利'])} 元;"
+        f"H2 方向「{r['H2资源调整方向']}」({r['建议投入幅度']:+.0%});主要风险:投入压缩可能带来短期销售回落,"
+        f"需以小流量试验校准弹性。",
+    style="List Bullet")
+doc.add_paragraph("")
+t1b = doc.add_table(rows=1, cols=7)
+t1b.style = "Light Grid Accent 1"
+t1b.alignment = WD_TABLE_ALIGNMENT.CENTER
+for i, h in enumerate(["渠道", "广告费(元)", "平台佣金(元)", "履约费(元)", "费用合计(元)", "H2 建议广告费(元)", "H2 方向"]):
+    t1b.rows[0].cells[i].text = h
+for _, r in ch.iterrows():
+    cells = t1b.add_row().cells
+    cells[0].text = r["渠道名称"]
+    cells[1].text = money(r["广告费"])
+    cells[2].text = money(r["平台佣金"])
+    cells[3].text = money(r["履约费"])
+    cells[4].text = money(r["费用合计"])
+    cells[5].text = money(r["广告费"] * (1 + r["建议投入幅度"]))
+    cells[6].text = r["H2资源调整方向"]
+instant_ex_ch06 = orders[(orders["发货方式"] == "即时配送") & (orders["渠道ID"] != "CH06")]["净收入"].sum()
+doc.add_paragraph("")
+doc.add_paragraph(
+    f"【待核事项】即时配送订单的收入与履约费归属(A-014):本报告按下单渠道(渠道ID)确认;"
+    f"若改按「即时配送全部归即时零售渠道」的读法,CH06 净收入将由 "
+    f"{money(float(ch.loc[ch['渠道ID'] == 'CH06', '净收入'].iloc[0]))} 元升至约 "
+    f"{money(float(ch.loc[ch['渠道ID'] == 'CH06', '净收入'].iloc[0]) + instant_ex_ch06)} 元,"
+    f"其余渠道合计减少 {money(instant_ex_ch06)} 元。"
+)
+doc.add_paragraph(
+    f"【待核事项】销售费用率 = 渠道费用合计 ÷ 净收入,为本报告自定补充指标(A-015);"
+    f"即时零售渠道的履约时效因材料无时效字段,只作定性描述(A-019)。"
 )
 
 doc.add_heading("第 2 章 门店经营诊断、分级与调整建议", level=1)
@@ -459,6 +548,48 @@ doc.add_paragraph(
     f"({', '.join(store[store['面积是否调整'] == '是'].index)}),其坪效口径可能失真,已在《异常与待核清单.xlsx》披露。"
 )
 
+doc.add_paragraph("【已确认事实】42 家门店分级与调整建议全览:")
+t2b = doc.add_table(rows=1, cols=8)
+t2b.style = "Light Grid Accent 1"
+t2b.alignment = WD_TABLE_ALIGNMENT.CENTER
+for i, h in enumerate(["门店", "区域", "城市", "营业面积(㎡)", "到店坪效(元/㎡/月)", "租售比", "分级", "调整建议"]):
+    t2b.rows[0].cells[i].text = h
+for sid, r in store.sort_values(["分级", "到店坪效"], ascending=[True, False]).iterrows():
+    cells = t2b.add_row().cells
+    cells[0].text = sid
+    cells[1].text = r["区域"]
+    cells[2].text = r["城市"]
+    cells[3].text = f"{int(r['营业面积'])}"
+    cells[4].text = f"{r['到店坪效']:.0f}"
+    cells[5].text = pct(r["租售比"])
+    cells[6].text = r["分级"]
+    cells[7].text = r["调整建议"]
+doc.add_paragraph("")
+doc.add_paragraph("【已确认事实】D 级门店处置明细(含租约约束与处置成本):")
+t2c = doc.add_table(rows=1, cols=8)
+t2c.style = "Light Grid Accent 1"
+t2c.alignment = WD_TABLE_ALIGNMENT.CENTER
+for i, h in enumerate(["门店", "区域", "连续 6 个月 D 级", "租约在 H2 内到期", "租期结束", "闭店违约金(元)", "O2O 履约贡献(元)", "调整建议"]):
+    t2c.rows[0].cells[i].text = h
+for sid, r in store[store["分级"] == "D"].sort_values("到店坪效").iterrows():
+    cells = t2c.add_row().cells
+    cells[0].text = sid
+    cells[1].text = r["区域"]
+    cells[2].text = "是" if r["连续6个月D级"] else "否"
+    cells[3].text = "是" if r["租约在H2内到期"] else "否"
+    cells[4].text = r["租期结束"]
+    cells[5].text = money(r["闭店违约金"])
+    cells[6].text = money(r["O2O履约贡献"])
+    cells[7].text = r["调整建议"]
+doc.add_paragraph("")
+doc.add_paragraph(
+    f"【待核事项】第 6.2 条未规定店型本已为前置仓的门店再次触发时的动作(A-016):"
+    f"S012、S023、S028 三家本身即为前置仓,本报告采纳「保留前置仓形态、以面积压缩与租金重议为主,"
+    f"并在 Q3 末复评是否转为纯自提点」;面积调整门店"
+    f"({', '.join(store[store['面积是否调整'] == '是'].index)})的坪效口径待补(A-002),"
+    f"补齐前后不参与坪效排序。"
+)
+
 doc.add_heading("第 3 章 促销组合效果评估与 H2 节奏建议", level=1)
 doc.add_paragraph(
     f"2026H1 共开展 50 个促销活动,实际费用合计 {money(activity['实际费用'].sum())} 元,"
@@ -483,6 +614,41 @@ doc.add_paragraph(
     f"预算按 H1 实际费用水平分配到 6 个月,重点保障双 11、双 12 等大促节点。"
 )
 
+doc.add_paragraph("【分析判断】建议取消的活动(ROI < 1,共 "
+                  f"{int((promo['建议动作'] == '取消').sum())} 个):")
+t3b = doc.add_table(rows=1, cols=5)
+t3b.style = "Light Grid Accent 1"
+t3b.alignment = WD_TABLE_ALIGNMENT.CENTER
+for i, h in enumerate(["活动ID", "活动类型", "渠道ID", "实际费用(元)", "ROI"]):
+    t3b.rows[0].cells[i].text = h
+for _, r in promo[promo["建议动作"] == "取消"].sort_values("ROI").iterrows():
+    cells = t3b.add_row().cells
+    cells[0].text = r["活动ID"]
+    cells[1].text = r["活动类型"]
+    cells[2].text = r["渠道ID"]
+    cells[3].text = money(r["实际费用"])
+    cells[4].text = f"{r['ROI']:.2f}"
+doc.add_paragraph("")
+doc.add_paragraph(f"【分析判断】建议调整的活动(1 ≤ ROI < 2,共 {int((promo['建议动作'] == '调整').sum())} 个):")
+t3c = doc.add_table(rows=1, cols=5)
+t3c.style = "Light Grid Accent 1"
+t3c.alignment = WD_TABLE_ALIGNMENT.CENTER
+for i, h in enumerate(["活动ID", "活动类型", "渠道ID", "实际费用(元)", "ROI"]):
+    t3c.rows[0].cells[i].text = h
+for _, r in promo[promo["建议动作"] == "调整"].sort_values("ROI").iterrows():
+    cells = t3c.add_row().cells
+    cells[0].text = r["活动ID"]
+    cells[1].text = r["活动类型"]
+    cells[2].text = r["渠道ID"]
+    cells[3].text = money(r["实际费用"])
+    cells[4].text = f"{r['ROI']:.2f}"
+doc.add_paragraph("")
+doc.add_paragraph(
+    "【待核事项】活动明细的活动价为加权成交价(保留 2 位小数),复算方向以「销售额 ÷ 销量」为准,"
+    "以单价反算产生的 ≤0.06 元差异属舍入(A-017);季节性 SKU 的适销期字段材料未提供,"
+    "季节性判断只作定性描述(A-018)。"
+)
+
 doc.add_heading("第 4 章 会员运营建议", level=1)
 doc.add_paragraph(
     f"{member_total:,} 名注册会员中,线上渠道注册 {pct(reg_dist.get('CH01', 0) + reg_dist.get('CH02', 0) + reg_dist.get('CH03', 0) + reg_dist.get('CH04', 0) + reg_dist.get('CH05', 0) + reg_dist.get('CH06', 0))}、"
@@ -495,6 +661,40 @@ doc.add_paragraph(
     f"平均 RFM 分 {rfm_mean:.2f}。建议:① 对 Top10% 会员配置专属服务与提前购;"
     f"② 对仅在单一渠道购买的会员投放到店自提/跨渠道优惠券,提升渠道协同;"
     f"③ 对流失会员按最近购买时间分群唤回,优先使用微信小程序等低费用渠道触达。"
+)
+
+member_level = member_base.set_index("会员ID")["会员等级"]
+cross2 = cross.copy()
+cross2["会员等级"] = cross2["会员ID"].map(member_level)
+segments = [
+    ("高价值活跃(Top10% 消费)", int(((cross2["累计消费"] >= top10_cut) & (cross2["流失标记"] != "是")).sum()),
+     "累计消费位居前 10%,仍活跃", "专属服务、提前购、跨渠道权益"),
+    ("多渠道会员(≥2 个渠道)", int((cross2["跨渠道购买渠道数"] >= 2).sum()),
+     "已在 2 个及以上渠道购买", "跨渠道优惠券,巩固协同"),
+    ("单渠道会员", int((cross2["跨渠道购买渠道数"] == 1).sum()),
+     "仅在一个渠道购买", "以自提/门店权益导流至小程序"),
+    ("流失会员(最近购买 >120 天)", int((cross2["流失标记"] == "是").sum()),
+     "已判定流失", "按最近购买时间分群唤回,优先低成本渠道"),
+    ("金卡/钻石会员", int(cross2["会员等级"].isin(["金卡", "钻石"]).sum()),
+     "高等级会员", "保级提醒与专属活动"),
+]
+doc.add_paragraph("【分析判断】会员分群与 H2 触达重点:")
+t4b = doc.add_table(rows=1, cols=4)
+t4b.style = "Light Grid Accent 1"
+t4b.alignment = WD_TABLE_ALIGNMENT.CENTER
+for i, h in enumerate(["分群", "规模(人)", "特征", "H2 触达重点"]):
+    t4b.rows[0].cells[i].text = h
+for name, size, feat, action in segments:
+    cells = t4b.add_row().cells
+    cells[0].text = name
+    cells[1].text = f"{size:,}"
+    cells[2].text = feat
+    cells[3].text = action
+doc.add_paragraph("")
+doc.add_paragraph(
+    f"【分析判断】渠道调整对会员资产的影响:CH03(天猫旗舰店)与 CH05(抖音小店)收缩前须完成会员迁移,"
+    f"把两渠道的高价值会员导向 CH02(微信小程序)与门店自提;单渠道会员 "
+    f"{int((cross2['跨渠道购买渠道数'] == 1).sum()):,} 人是协同提升的主要对象。"
 )
 
 doc.add_heading("第 5 章 H2 资源再配置方案与执行优先级", level=1)
@@ -517,6 +717,61 @@ for item in [
 ]:
     doc.add_paragraph(item, style="List Bullet")
 
+doc.add_paragraph("【分析判断】三类执行优先级与实施条件:")
+prio_rows = [
+    ("P0-1", "可立即执行", "启动 S029、S017 闭店评估", "门店", "停止月均亏损(合计 1,303,618.01 元)与租金支出",
+     "法务确认通知状态;租约自然到期不续约", "S029 通知节点可能已过;员工安置与会员迁移", "授权不续约与处置预算"),
+    ("P0-2", "可立即执行", "收缩 CH03、CH05 低效投放并设定费用率目标", "渠道", "释放投放额度,改善费用结构",
+     "保留高效活动与会员获取职能", "销售短期回落", "确认渠道费用率下降目标值"),
+    ("P1-1", "需补充核验后执行", "D 级门店转前置仓/自提点(含已为前置仓门店)", "门店", "降低到店模式下的租售比压力",
+     "房东/业态许可、改造投入、节点容量测算(A-016)", "改造成本未知;容量不足", "确认改造预算与房东许可"),
+    ("P1-2", "需补充核验后执行", "C 级门店降租谈判与品类优化", "门店", "修复负经营收益",
+     "需要门店-品类毛利与库存数据(A-012)", "谈判周期与续约条款", "授权降租谈判区间"),
+    ("P1-3", "需补充核验后执行", "CH02 增投 20% 并扩充会员运营", "渠道/会员", "放大唯一正净利渠道的贡献",
+     "投放到店自提与小程序的承接能力", "投放效率回落", "确认增投额度与考核口径"),
+    ("P1-4", "需补充核验后执行", "按 H2 节奏表落地促销组合", "促销", "取消低效活动、保留高效类型",
+     "H2 活动日历与总预算(A-013)", "日历未定导致节点错配", "确认 H2 预算与活动日历"),
+    ("P2-1", "仅适用于特定情景", "把即时配送订单统一挂到即时零售渠道核算", "渠道", "统一履约归属、便于考核时效",
+     "需先明确口径(A-014)并重算 6 渠道规模", "渠道规模与费用率全部变化", "确认归属口径"),
+    ("P2-2", "仅适用于特定情景", "门店履约时效与节点容量考核", "门店/渠道", "支撑闭店后履约迁移与时效承诺",
+     "需补充配送时长、半径与容量数据(A-019)", "无数据则无法承诺时效", "确认数据补充责任方"),
+]
+t5 = doc.add_table(rows=1, cols=8)
+t5.style = "Light Grid Accent 1"
+t5.alignment = WD_TABLE_ALIGNMENT.CENTER
+for i, h in enumerate(["编号", "类别", "动作", "对象", "预期经营作用", "实施条件", "主要风险", "待决策事项"]):
+    t5.rows[0].cells[i].text = h
+for row in prio_rows:
+    cells = t5.add_row().cells
+    for i, v in enumerate(row):
+        cells[i].text = v
+doc.add_paragraph("")
+promo_h1 = activity["实际费用"].sum()
+h2_low = promo_h1 * (0.12 + 0.10 + 0.14 + 0.16 + 0.22 + 0.18)
+h2_high = promo_h1 * (0.16 + 0.14 + 0.18 + 0.20 + 0.26 + 0.22)
+ch_h1_ad = ch["广告费"].sum()
+ch_h2_ad = (ch["广告费"] * (1 + ch["建议投入幅度"])).sum()
+store_rent_release = store[store["调整建议"].isin(["闭店评估", "转前置仓或自提点"])]["月均租金及物业费"].sum() * 6
+doc.add_paragraph("【建议值】H2 资源再配置对照(金额均为建议值或估算):")
+t5b = doc.add_table(rows=1, cols=5)
+t5b.style = "Light Grid Accent 1"
+t5b.alignment = WD_TABLE_ALIGNMENT.CENTER
+for i, h in enumerate(["资源池", "H1 实际(元)", "H2 建议(元)", "差异(元)", "口径说明"]):
+    t5b.rows[0].cells[i].text = h
+for row in [
+    ("渠道广告投放", money(ch_h1_ad), f"{money(ch_h2_ad)}(建议值)", money(ch_h2_ad - ch_h1_ad), "按逐渠道调整幅度测算,以预算审批为前提"),
+    ("促销活动费用", money(promo_h1), f"{money(h2_low)} - {money(h2_high)}(建议值)", f"{money(h2_low - promo_h1)} ~ {money(h2_high - promo_h1)}", "按 H2 六个月节奏表分配比例测算"),
+    ("门店租金(闭店 2 家 + 转型 5 家)", money(store_rent_release), "0(闭店)/ 待评估(转型)", money(-store_rent_release), "仅租金口径的估算,不含改造与腾退成本"),
+]:
+    cells = t5b.add_row().cells
+    for i, v in enumerate(row):
+        cells[i].text = v
+doc.add_paragraph("")
+doc.add_paragraph(
+    "【待核事项】人力再配置:材料只有人工费用口径,未提供 42 店编制、工时与班次(A-012),"
+    "本报告只给方向与匹配逻辑,具体人数须在事实补齐后确定。"
+)
+
 doc.add_heading("附录 关键判断依据回指附件清单", level=1)
 doc.add_paragraph("本报告全部关键数字均可回指下列附件的具体 Sheet 与字段:")
 appendix = [
@@ -530,6 +785,13 @@ appendix = [
     ("促销 ROI 与类型效果", "《2026H1促销活动记录.xlsx》", "活动效果 Sheet(增量毛利/ROI)、活动清单 Sheet(活动类型/实际费用)"),
     ("会员结构、复购与跨渠道", "《2026H1会员与跨渠道订单.xlsx》", "会员基础/会员订单/跨渠道行为 Sheet"),
     ("SKU 成本与品类等级", "《SKU主数据.xlsx》", "SKU主数据 Sheet(单位成本/标准标价/品类等级)"),
+    ("6 月退款与数据提取时点", "《2026H1渠道销售明细.xlsx》 渠道退款明细 Sheet", "《渠道与门店管理策略.docx》第 4.11 条(提取时点 2026-06-25)"),
+    ("门店费用与人力口径", "《2026H1门店经营台账.xlsx》", "门店费用 Sheet(人力/营销/水电/履约包装/其他/折旧摊销;第 4.8 条只到费用级)"),
+    ("H2 促销节奏与建议投入", "《2026H1促销活动记录.xlsx》 + Query 交付物 4", "活动效果 Sheet(ROI)、活动清单 Sheet(实际费用);H2 金额为建议值(A-013)"),
+    ("即时配送与履约归属口径", "《2026H1渠道销售明细.xlsx》", "渠道销售明细 Sheet(`发货方式`/`渠道ID`);口径见 A-014"),
+    ("销售费用率定义", "《2026H1线上投放与平台费用.xlsx》", "渠道月度费用 Sheet(费用合计 ÷ 净收入);自定指标见 A-015"),
+    ("季节性 SKU 适销期", "《SKU主数据.xlsx》", "`状态`=季节性的 SKU;适销期字段缺失,见 A-018"),
+    ("履约时效与节点容量", "2026H1 全部附件", "无配送时长/半径/容量字段,见 A-019"),
 ]
 t4 = doc.add_table(rows=1, cols=3)
 t4.style = "Light Grid Accent 1"
