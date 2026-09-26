@@ -2,7 +2,7 @@
 2026H2 渠道与门店经营策略 — 专家 Solution 生成器
 =================================================
 依据:`docs/specs/step2-query.md`(正式任务书)与 `input/` 下的 9 个附件
-产出:`output/` 下 5 个交付物 + 《数据血缘说明.md》(工作版,含 Check 自查表);\n      `output-submit/` 下 5 个交付物(提交版,无 Check 表、不含血缘说明)
+产出:`output/` 下 5 个交付物 + 《数据血缘说明.md`(交付即用:不注入 Check 辅助工作表,自查改由脚本输出)
 
 使用:
     .venv/bin/python build_solution.py
@@ -1162,58 +1162,10 @@ print("已写出 数据血缘说明.md")
 sys.path.insert(0, str(Path("docs/skill").resolve()))
 import add_workbook_checks  # noqa: E402
 
-add_workbook_checks.main([])
+# 交付物保持"提交即用":只刷新枚举下拉(不新增工作表),自查结果写到 docs/reviews/
+add_workbook_checks.apply_validations()
+add_workbook_checks.main(["--mode", "verify", "--report", "docs/reviews/交付物自检.md"])
 
-
-# ============================================================
-# 8d. 生成"提交版"交付物(output-submit/)
-#     - 只含 Query 六 要求的 5 个交付物,不含《数据血缘说明.md》
-#     - 剥离 4 个 Excel 的 Check 自查表(评估表 A-16:不得增加辅助工作表)
-#     - 保留 Query 规定的 Sheet 名称、行数与字段,不打包(由提交人自行打包)
-# ============================================================
-import shutil  # noqa: E402
-
-SUBMIT = Path("output-submit")
-REQUIRED_SHEETS = {
-    "门店分级与调整建议.xlsx": ["门店清单"],
-    "渠道资源再配置建议.xlsx": ["渠道清单"],
-    "促销组合优化建议.xlsx": ["活动评估", "H2 节奏建议"],
-    "异常与待核清单.xlsx": ["异常清单"],
-}
-DELIVERABLES = [
-    "2026H2 渠道与门店经营策略报告.docx",
-    "门店分级与调整建议.xlsx",
-    "渠道资源再配置建议.xlsx",
-    "促销组合优化建议.xlsx",
-    "异常与待核清单.xlsx",
-]
-
-
-def make_submission_set():
-    SUBMIT.mkdir(exist_ok=True)
-    for name in DELIVERABLES:
-        src, dst = OUTPUT / name, SUBMIT / name
-        if name.endswith(".xlsx"):
-            wb = openpyxl.load_workbook(src)
-            for extra in [s for s in wb.sheetnames if s not in REQUIRED_SHEETS[name]]:
-                del wb[extra]
-            missing = [s for s in REQUIRED_SHEETS[name] if s not in wb.sheetnames]
-            if missing:
-                raise SystemExit(f"{name} 缺少 Query 规定的 Sheet:{missing}")
-            wb.save(dst)
-        else:
-            shutil.copyfile(src, dst)
-    print("已写出提交版交付物到 output-submit/")
-    for name in DELIVERABLES:
-        extra = ""
-        if name.endswith(".xlsx"):
-            wb = openpyxl.load_workbook(SUBMIT / name, read_only=True)
-            extra = f" | Sheet: {wb.sheetnames}"
-            wb.close()
-        print(f"  · {name}{extra}")
-
-
-make_submission_set()
 
 # ============================================================
 # 9. 控制台摘要

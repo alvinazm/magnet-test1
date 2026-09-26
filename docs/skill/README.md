@@ -29,6 +29,7 @@
 | `data-validation.py` | 脚本 | 材料自检 L1–L5(含 10 条跨口径反证探针、风险登记与严格模式) | 骨架复用,L1–L5 业务项按题重写 |
 | `validate_a_module_levels.py` | 脚本 | 评估表模块 A 的档位机审(字段完整、档位显式对应) | **原样复用** |
 | `validate_lineage.py` | 脚本 | 数据血缘说明的可复核性机审 | 骨架复用,字段清单按题改 |
+| `add_workbook_checks.py` | 脚本 | **交付物自检**:按 Query/制度口径复算 Excel 交付物的派生值、枚举取值与对象行数(默认只读,结果写 `docs/reviews/交付物自检.md`);`--mode validations` 刷新枚举下拉,`--mode inject` 注入 Check 工作表(仅工作版) | 骨架复用,口径按题改 |
 | `validate_all.py` | 脚本 | 统一机审入口:数据自检 + A 模块档位 + 附件/Sheet 名一致性 + 引用完整性 | **原样复用**,只改文件清单常量 |
 | `validate_baseline.py` | 脚本 | **材料基线比对**:把当前 `input/` 与基线快照逐 Sheet 比对,列出变化并判断是否超出预期 | **原样复用** |
 | `baseline_snapshot.json` | 快照 | 材料基线指纹(各 Sheet 行数/列数/内容哈希/数值列合计),由 `--update` 生成 | 每题一份 |
