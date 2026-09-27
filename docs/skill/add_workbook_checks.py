@@ -38,20 +38,22 @@ DV_SPEC = {
                                  ("门店清单", "M", '"维持,整改,转前置仓或自提点,闭店评估"'),
                                  ("门店清单", "O", '"已确认,待补"')],
     "渠道资源再配置建议.xlsx": [("渠道清单", "C", '"自营,平台,即时零售"'),
-                                 ("渠道清单", "L", '"增投,维持,收缩"'), ("渠道清单", "P", '"已确认,待补"')],
+                                 ("渠道清单", "N", '"已确认,待补"')],
     "促销组合优化建议.xlsx": [("活动评估", "I", '"保留,调整,取消"')],
     "异常与待核清单.xlsx": [("异常清单", "B", '"数据冲突,口径不清,缺失,越界,时效性"'),
                             ("异常清单", "G", '"高,中,低"')],
 }
 ENUM_OK = {
-    "门店分级与调整建议.xlsx": [("分级", {"A", "B", "C", "D"}),
-                                 ("调整建议", {"维持", "整改", "转前置仓或自提点", "闭店评估"}),
-                                 ("数据状态", {"已确认", "待补"}), ("面积是否调整", {"是", "否"})],
+    "门店分级与调整建议.xlsx": [("分级(A/B/C/D)", {"A", "B", "C", "D"}),
+                                 ("调整建议(维持/整改/转前置仓或自提点/闭店评估)",
+                                  {"维持", "整改", "转前置仓或自提点", "闭店评估"}),
+                                 ("数据状态(已确认/待补)", {"已确认", "待补"}), ("面积是否调整", {"是", "否"})],
     "渠道资源再配置建议.xlsx": [("渠道类型", {"自营", "平台", "即时零售"}),
-                                 ("H2资源调整方向", {"增投", "维持", "收缩"}), ("数据状态", {"已确认", "待补"})],
-    "促销组合优化建议.xlsx": [("建议动作", {"保留", "调整", "取消"})],
-    "异常与待核清单.xlsx": [("异常类别", {"数据冲突", "口径不清", "缺失", "越界", "时效性"}),
-                            ("严重度", {"高", "中", "低"})],
+                                 ("数据状态(已确认/待补)", {"已确认", "待补"})],
+    "促销组合优化建议.xlsx": [("建议动作(保留/调整/取消)", {"保留", "调整", "取消"})],
+    "异常与待核清单.xlsx": [("异常类别(数据冲突/口径不清/缺失/越界/时效性)",
+                             {"数据冲突", "口径不清", "缺失", "越界", "时效性"}),
+                            ("严重度(高/中/低)", {"高", "中", "低"})],
 }
 
 
@@ -71,12 +73,12 @@ def verify_workbook(path: Path) -> list[tuple[str, str, bool, str]]:
     if name == "门店分级与调整建议.xlsx":
         hdr, rows = _rows(wb["门店清单"])
         i = {n: k for k, n in enumerate(hdr)}
-        bad_ping = max((abs(r[i["到店坪效(元/㎡/月)"]] - round(r[i["2026H1累计到店销售额"]] / 6 / r[i["营业面积"]], 0))
+        bad_ping = max((abs(r[i["到店坪效"]] - round(r[i["2026H1 累计到店销售额"]] / 6 / r[i["营业面积"]], 0))
                         for r in rows), default=0)
-        bad_grade = sum(1 for r in rows if r[i["分级"]] != (
-            "D" if r[i["租售比"]] > 0.35 else "A" if r[i["到店坪效(元/㎡/月)"]] >= 5000 else
-            "B" if r[i["到店坪效(元/㎡/月)"]] >= 2000 else "C" if r[i["到店坪效(元/㎡/月)"]] >= 1000 else "D"))
-        bad_adj = sum(1 for r in rows if r[i["面积是否调整"]] == "是" and r[i["数据状态"]] != "待补")
+        bad_grade = sum(1 for r in rows if r[i["分级(A/B/C/D)"]] != (
+            "D" if r[i["租售比"]] > 0.35 else "A" if r[i["到店坪效"]] >= 5000 else
+            "B" if r[i["到店坪效"]] >= 2000 else "C" if r[i["到店坪效"]] >= 1000 else "D"))
+        bad_adj = sum(1 for r in rows if r[i["面积是否调整"]] == "是" and r[i["数据状态(已确认/待补)"]] != "待补")
         out += [("门店清单", "对象行数 = 42", len(rows) == 42, f"{len(rows)} 行"),
                 ("门店清单", "坪效复算差异 ≤ 1", bad_ping <= 1, f"最大差异 {bad_ping:.4f}"),
                 ("门店清单", "分级与坪效/租售比阈值一致", bad_grade == 0, f"不一致 {bad_grade} 家"),
@@ -84,13 +86,16 @@ def verify_workbook(path: Path) -> list[tuple[str, str, bool, str]]:
     if name == "渠道资源再配置建议.xlsx":
         hdr, rows = _rows(wb["渠道清单"])
         i = {n: k for k, n in enumerate(hdr)}
-        bad_gm = max((abs(r[i["渠道毛利率"]] - r[i["毛利(元)"]] / r[i["2026H1净收入(元)"]]) for r in rows), default=0)
+        bad_gm = max((abs(r[i["渠道毛利率"]] - r[i["毛利"]] / r[i["2026H1 净收入"]]) for r in rows), default=0)
+        dir_ok = all(any(k in str(r[i["H2 资源调整方向(增投/维持/收缩)与建议投入幅度"]]) for k in ("增投", "维持", "收缩"))
+                     for r in rows)
         out += [("渠道清单", "对象行数 = 6", len(rows) == 6, f"{len(rows)} 行"),
-                ("渠道清单", "毛利率 = 毛利 ÷ 净收入(≤0.0005)", bad_gm <= 0.0005, f"最大差异 {bad_gm:.6f}")]
+                ("渠道清单", "毛利率 = 毛利 ÷ 净收入(≤0.0005)", bad_gm <= 0.0005, f"最大差异 {bad_gm:.6f}"),
+                ("渠道清单", "方向字段含 增投/维持/收缩", dir_ok, "全部包含" if dir_ok else "存在缺失")]
     if name == "促销组合优化建议.xlsx":
         hdr, rows = _rows(wb["活动评估"])
         i = {n: k for k, n in enumerate(hdr)}
-        bad_roi = max((abs(r[i["ROI"]] - round(r[i["增量毛利(元)"]] / r[i["实际费用(元)"]], 2)) for r in rows), default=0)
+        bad_roi = max((abs(r[i["ROI"]] - round(r[i["增量毛利"]] / r[i["实际费用"]], 2)) for r in rows), default=0)
         h2 = wb["H2 节奏建议"] if "H2 节奏建议" in wb.sheetnames else None
         out += [("活动评估", "活动行数 = 50", len(rows) == 50, f"{len(rows)} 行"),
                 ("活动评估", "ROI = 增量毛利 ÷ 实际费用(按 2 位呈现,≤0.0005)", bad_roi <= 0.0005, f"最大差异 {bad_roi:.6f}"),
@@ -100,8 +105,12 @@ def verify_workbook(path: Path) -> list[tuple[str, str, bool, str]]:
         hdr, rows = _rows(wb["异常清单"])
         i = {n: k for k, n in enumerate(hdr)}
         ids = [r[i["异常编号"]] for r in rows]
+        owner = sum(1 for r in rows if "承接:" in str(r[i["建议处理方式"]]))
+        follow = sum(1 for r in rows if "补齐/关闭后:" in str(r[i["建议处理方式"]]))
         out += [("异常清单", "条目数 ≥ 4 且编号唯一", len(rows) >= 4 and len(ids) == len(set(ids)),
-                 f"{len(rows)} 条,唯一={len(ids) == len(set(ids))}")]
+                 f"{len(rows)} 条,唯一={len(ids) == len(set(ids))}"),
+                ("异常清单", "每条写明承接方(B13)", owner == len(rows), f"{owner}/{len(rows)}"),
+                ("异常清单", "每条写明补齐/关闭后影响(B14)", follow == len(rows), f"{follow}/{len(rows)}")]
     for field, allowed in ENUM_OK.get(name, []):
         sheet = REQUIRED_SHEETS[name][0]
         hdr, rows = _rows(wb[sheet])
