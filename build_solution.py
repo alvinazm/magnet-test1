@@ -136,11 +136,18 @@ store = store_month.groupby("门店ID").agg(
     到店销售额=("到店销售额", "sum"),
     O2O履约贡献=("门店O2O履约贡献", "sum"),
     履约单量=("线上订单履约单量", "sum"),
+    到店毛利额=("毛利额", "sum"),
 ).join(store_base.set_index("门店ID")[["门店名称", "区域", "城市", "店型", "营业面积", "面积是否调整"]])
 store["月均到店销售"] = store["到店销售额"] / 6
 store["月均租金及物业费"] = store_exp.groupby("门店ID")["租金及物业费"].mean()
 store["到店坪效"] = store["月均到店销售"] / store["营业面积"]
 store["租售比"] = store["月均租金及物业费"] / store["月均到店销售"]
+store_fee_total = store_exp.assign(
+    费用合计=store_exp[["租金及物业费", "人力", "营销", "水电", "履约包装", "其他", "折旧摊销"]].sum(axis=1)
+).groupby("门店ID")["费用合计"].sum()
+store["门店费用合计"] = store.index.map(store_fee_total)
+# 门店经营收益 = 到店毛利额 − 门店费用合计(不含 O2O 收入,避免跨层重复计量)
+store["经营收益"] = store["到店毛利额"] - store["门店费用合计"]
 
 
 def grade(peak, ratio):
@@ -171,12 +178,29 @@ store["闭店违约金"] = [lease[s]["违约金"] for s in store.index]
 store["租约在H2内到期"] = [lease[s]["租期结束"] <= "2026-12-31" for s in store.index]
 
 
+def _longest_true_streak(flags):
+    best = cur = 0
+    for flag in flags:
+        cur = cur + 1 if flag else 0
+        best = max(best, cur)
+    return best
+
+
+# 第 6.2 条:租售比"连续 3 个月 >35%"才可转前置仓或自提点,必须逐月判定
+monthly_ratio_flag = monthly.sort_values(["门店ID", "月份"]).assign(超35=lambda d: d["租售比"] > 0.35)
+streak_35 = monthly_ratio_flag.groupby("门店ID")["超35"].apply(lambda s: _longest_true_streak(list(s)))
+store["连续超35最长月数"] = store.index.map(streak_35).astype(int)
+store["满足6.2转换条件"] = store["连续超35最长月数"] >= 3
+
+
 def store_action(r):
     # 取值必须落在 Query 交付物 2 规定的枚举内:维持 / 整改 / 转前置仓或自提点 / 闭店评估
     if r["分级"] == "D" and r["连续6个月D级"] and r["租约在H2内到期"]:
         return "闭店评估"
     if r["分级"] == "D":
-        return "转前置仓或自提点"
+        # 仅满足 6.2 条逐月条件(连续 3 个月 >35%)的门店可转前置仓或自提点;
+        # 未满足者不得按半年均值转换,列为 D 级整改候选
+        return "转前置仓或自提点" if r["满足6.2转换条件"] else "整改"
     if r["分级"] == "C":
         return "整改"
     if r["分级"] == "A":
@@ -192,7 +216,9 @@ store["关键依据"] = store.apply(
         f"《2026H1门店经营台账.xlsx》Sheet「门店费用」的 `租金及物业费`(月均 {money(r['月均租金及物业费'])} 元);"
         f"《2026H1门店经营台账.xlsx》Sheet「门店基础信息」的 `营业面积`({int(r['营业面积'])} ㎡)"
         + (
-            f";《华东区门店租约汇总.docx》该门店的 `租期结束`({r['租期结束']})与 `闭店条件`"
+            f";《华东区门店租约汇总.docx》该门店的 `租期结束`({r['租期结束']})与 `闭店条件`;"
+            f"逐月 `租售比`(由 Sheet「门店费用」的 `租金及物业费` ÷ Sheet「门店月度经营」的 `到店销售额` 计算)"
+            f"连续 >35% 最长 {int(r['连续超35最长月数'])} 个月"
             if r["分级"] == "D"
             else ""
         )
@@ -290,7 +316,8 @@ anomalies = [
      '门店费用"租金及物业费"为合并口径(= 合同月租金 + 物业费),与租约文档单列的"月租金"不同口径。',
      "门店租售比与门店费用结构", "低",
      '租售比统一使用"租金及物业费"合并口径;租约文档用于合同条款(租期、违约金、递增)判断',
-     "《渠道与门店管理策略.docx》第 4.4 条;《华东区门店租约汇总.docx》该门店的 `月租金` 与 `物业费`;《数据血缘说明.md》第二节"),
+     "《渠道与门店管理策略.docx》第 4.4 条(租售比与租金口径);《华东区门店租约汇总.docx》该门店的 `月租金` 与 `物业费`(与台账 "
+     "`租金及物业费` 的差异);《2026H1门店经营台账.xlsx》Sheet「门店费用」的 `租金及物业费`"),
     ("A-003", "口径不清", "2026H1渠道销售明细.xlsx", "Sheet「渠道销售明细」的 `发货方式` / `门店ID`",
      "快递订单由中心仓发货、不关联门店ID,不计入门店 O2O 履约贡献;门店发货/到店自提/即时配送订单均关联门店。",
      "门店 O2O 履约贡献与履约单量口径", "低",
@@ -377,6 +404,12 @@ anomalies = [
      "6 个渠道的 H2 建议投入金额与资源再配置方案", "中",
      "披露阈值定义方法与适用条件;金额一律标注为建议值或条件性方案,以预算审批为前提;若管理层设定其他门槛,按新阈值重算幅度",
      "《渠道与门店管理策略.docx》第 1.1–1.3 条只规定渠道定位与平台渠道利润分级,未规定投入调整阈值;Query 五 要求自定阈值须披露定义方法"),
+    ("A-020", "缺失", "2026H1门店经营台账.xlsx", "Sheet「门店月度经营」的 `毛利额` / Sheet「门店库存」的 `品类`",
+     "门店毛利只到门店-月粒度(`毛利额`),库存与滞销只到门店-品类-月粒度,材料未提供门店-品类级毛利,无法按品类判断单店盈亏结构。",
+     "C 级与 D 级门店的品类结构优化、库存清货取舍", "低",
+     "品类优化只给方向,不出具品类级盈亏结论;由财务/BI 补齐门店-品类毛利后重算品类取舍",
+     "《2026H1门店经营台账.xlsx》Sheet「门店月度经营」的 `毛利额`(仅门店-月粒度)与 Sheet「门店库存」的 `品类`"
+     "(无毛利字段);《渠道与门店管理策略.docx》第 5.1 条(缺失事实须披露并缩小结论范围)"),
 ]
 # 列名必须与 Query 六【交付物 5】逐字一致(A16/B12)
 anomaly_df = pd.DataFrame(anomalies, columns=[
@@ -404,6 +437,7 @@ OWNER_AND_FOLLOWUP = {
     "A-017": ("商品/采购", "补适销期字段后核验季节性 SKU 的销售合规性"),
     "A-018": ("门店运营", "补配送半径、时效与节点容量后重做时效考核与迁移方案"),
     "A-019": ("财务/门店运营", "阈值确认后重算 6 个渠道的 H2 建议投入金额"),
+    "A-020": ("财务/BI", "补齐门店-品类毛利后重算 C 级与 D 级门店的品类结构优化与清货取舍"),
 }
 anomaly_df["建议处理方式"] = [
     f"{row['建议处理方式']};承接:{OWNER_AND_FOLLOWUP[row['异常编号']][0]};"
@@ -516,7 +550,9 @@ doc.add_paragraph(
 doc.add_paragraph(
     "【口径说明】《异常与待核清单.xlsx》`严重度(高/中/低)` 的判定口径:会改变核心结论、主要名单或重要金额的为「高」;"
     "影响结论可信度、需要返工核验但不动摇主要结论的为「中」;仅影响完备性或可复核性的为「低」。"
-    "同一类问题按同一影响类别取同一档,判定可逐条复核(见《数据血缘说明.md》第六节)。"
+    "同一类问题按同一影响类别取同一档,判定可逐条复核:逐条依据见《异常与待核清单.xlsx》Sheet「异常清单」的 "
+    "`影响范围`、`严重度(高/中/低)`、`披露依据` 三列;其中「高」档的制度来源为"
+    "《渠道与门店管理策略.docx》第 4.11 条(2026-06 退款完整性不成立)与第 7.5 条(活动预算审批)。"
 )
 
 doc.add_heading("第 1 章 渠道结构诊断与 H2 资源调整建议", level=1)
@@ -556,12 +592,18 @@ doc.add_paragraph(
 )
 
 doc.add_paragraph("【分析判断】逐渠道诊断与 H2 动作(含依据与主要风险):")
+channel_risk = {
+    "增投": "投放边际效率下降、承接能力(库存与自提/配送产能)不足,增投未必同比例带来净利改善;须以小步增量投放并同步校验承接能力",
+    "维持": "费用结构未改善、亏损延续;若人群定向与退货售后、履约成本不优化,现有投入水平下该渠道仍将维持净亏损",
+    "收缩": "投入压缩可能带来短期销售回落;需以小流量试验校准弹性,并保留高效活动与会员获取职能",
+}
 for _, r in ch.iterrows():
     doc.add_paragraph(
         f"{r['渠道名称']}({r['渠道ID']}):H1 净收入 {money(r['净收入'])} 元,毛利率 {pct(r['渠道毛利率'])},"
         f"销售费用率 {pct(r['销售费用率'])},投放 ROI {r['投放ROI']:.2f},渠道净利 {money(r['渠道净利'])} 元;"
-        f"H2 方向「{r['H2资源调整方向']}」({r['建议投入幅度']:+.0%});主要风险:投入压缩可能带来短期销售回落,"
-        f"需以小流量试验校准弹性。",
+        f"H2 方向「{r['H2资源调整方向']}」("
+        + (f"{r['建议投入幅度']:+.0%}" if r["建议投入幅度"] else "0%")
+        + f");主要风险:{channel_risk[r['H2资源调整方向']]}。",
     style="List Bullet")
 doc.add_paragraph("")
 t1b = doc.add_table(rows=1, cols=7)
@@ -600,11 +642,16 @@ doc.add_paragraph(
     f"A 级 {grade_dist['A']} 家、B 级 {grade_dist['B']} 家、C 级 {grade_dist['C']} 家、D 级 {grade_dist['D']} 家,"
     f"全部门店均给出级别,无无法归类的门店。"
 )
+d_close = store[(store["分级"] == "D") & store["连续6个月D级"] & store["租约在H2内到期"]]
+d_conv = store[(store["分级"] == "D") & ~store.index.isin(d_close.index) & store["满足6.2转换条件"]]
+d_rect = store[(store["分级"] == "D") & ~store.index.isin(d_close.index) & ~store["满足6.2转换条件"]]
 doc.add_paragraph(
-    f"D 级门店 {grade_dist['D']} 家中,"
-    f"{int(store[(store['分级'] == 'D') & store['连续6个月D级'] & store['租约在H2内到期']].shape[0])} 家同时满足"
-    f"「租约在 2026H2 内到期」与「连续 6 个月 D 级」两项闭店条件,建议启动闭店评估;"
-    f"其余 D 级门店租约未到期,建议按转前置仓/自提点方向评估。"
+    f"D 级门店 {grade_dist['D']} 家,按第 6.1、6.2 条逐项判定如下:"
+    f"{len(d_close)} 家({', '.join(d_close.index)})同时满足「租约在 2026H2 内到期」与「连续 6 个月 D 级」两项闭店条件,"
+    f"建议启动闭店评估;{len(d_conv)} 家({', '.join(d_conv.index)})满足第 6.2 条「租售比连续 3 个月 >35%」的逐月条件,"
+    f"建议按转前置仓或自提点方向评估;{len(d_rect)} 家({', '.join(d_rect.index)})逐月租售比未形成连续 3 个月 >35%"
+    f"(最长连续 {int(store.loc[d_rect.index, '连续超35最长月数'].max())} 个月),不适用 6.2 条转换,列为 D 级整改候选,"
+    f"半年均值不用于转换判定。"
 )
 t2 = doc.add_table(rows=1, cols=5)
 t2.style = "Light Grid Accent 1"
@@ -636,39 +683,47 @@ doc.add_paragraph(
     f"按《渠道与门店管理策略.docx》第 2.1–2.3 条不参与门店分级;库存处置(清货、调拨、退货)的分项成本材料未提供,"
     f"已在《异常与待核清单.xlsx》`A-007` 列为待补,承接方为商品/供应链。"
 )
-doc.add_paragraph("【已确认事实】42 家门店分级与调整建议全览:")
+adj_stores = store[store["面积是否调整"] == "是"]
+doc.add_paragraph(
+    f"【已确认事实】42 家门店分级与调整建议全览(按分级与到店坪效排序;"
+    f"面积调整门店 {len(adj_stores)} 家({', '.join(adj_stores.index)})的坪效标注「待核」并列于表末,不参与坪效排序):"
+)
 t2b = doc.add_table(rows=1, cols=8)
 t2b.style = "Light Grid Accent 1"
 t2b.alignment = WD_TABLE_ALIGNMENT.CENTER
 for i, h in enumerate(["门店", "区域", "城市", "营业面积(㎡)", "到店坪效(元/㎡/月)", "租售比", "分级", "调整建议"]):
     t2b.rows[0].cells[i].text = h
-for sid, r in store.sort_values(["分级", "到店坪效"], ascending=[True, False]).iterrows():
+store_ranked = store[store["面积是否调整"] == "否"].sort_values(["分级", "到店坪效"], ascending=[True, False])
+store_display = pd.concat([store_ranked, adj_stores.sort_values("到店坪效", ascending=False)])
+for sid, r in store_display.iterrows():
     cells = t2b.add_row().cells
     cells[0].text = sid
     cells[1].text = r["区域"]
     cells[2].text = r["城市"]
     cells[3].text = f"{int(r['营业面积'])}"
-    cells[4].text = f"{r['到店坪效']:.0f}"
+    cells[4].text = f"{r['到店坪效']:.0f}(待核)" if r["面积是否调整"] == "是" else f"{r['到店坪效']:.0f}"
     cells[5].text = pct(r["租售比"])
     cells[6].text = r["分级"]
     cells[7].text = r["调整建议"]
 doc.add_paragraph("")
 doc.add_paragraph("【已确认事实】D 级门店处置明细(含租约约束与处置成本):")
-t2c = doc.add_table(rows=1, cols=8)
+t2c = doc.add_table(rows=1, cols=9)
 t2c.style = "Light Grid Accent 1"
 t2c.alignment = WD_TABLE_ALIGNMENT.CENTER
-for i, h in enumerate(["门店", "区域", "连续 6 个月 D 级", "租约在 H2 内到期", "租期结束", "闭店违约金(元)", "O2O 履约贡献(元)", "调整建议"]):
+for i, h in enumerate(["门店", "区域", "连续 6 个月 D 级", "租售比连续 >35% 最长月数",
+                       "租约在 H2 内到期", "租期结束", "闭店违约金(元)", "O2O 履约贡献(元)", "调整建议"]):
     t2c.rows[0].cells[i].text = h
 for sid, r in store[store["分级"] == "D"].sort_values("到店坪效").iterrows():
     cells = t2c.add_row().cells
     cells[0].text = sid
     cells[1].text = r["区域"]
     cells[2].text = "是" if r["连续6个月D级"] else "否"
-    cells[3].text = "是" if r["租约在H2内到期"] else "否"
-    cells[4].text = r["租期结束"]
-    cells[5].text = money(r["闭店违约金"])
-    cells[6].text = money(r["O2O履约贡献"])
-    cells[7].text = r["调整建议"]
+    cells[3].text = f"{int(r['连续超35最长月数'])} 个月" + ("(满足 6.2)" if r["满足6.2转换条件"] else "(不满足 6.2)")
+    cells[4].text = "是" if r["租约在H2内到期"] else "否"
+    cells[5].text = r["租期结束"]
+    cells[6].text = money(r["闭店违约金"])
+    cells[7].text = money(r["O2O履约贡献"])
+    cells[8].text = r["调整建议"]
 doc.add_paragraph("")
 doc.add_paragraph(
     f"【待核事项】第 6.2 条未规定店型本已为前置仓的门店再次触发时的动作(A-015):"
@@ -799,30 +854,47 @@ doc.add_paragraph(
     f"收缩渠道释放的投放额度优先转入 {wx['渠道名称']} 与高 ROI 促销类型。"
 )
 doc.add_paragraph(
-    f"门店资源:D 级门店按闭店/转型路径处置,预计释放人力与租金;"
+    f"门店资源:D 级门店按三类路径处置——{len(d_close)} 家启动闭店评估、{len(d_conv)} 家评估转前置仓或自提点、"
+    f"{len(d_rect)} 家列为 D 级整改候选;仅闭店门店与部分转型门店可能释放租金,"
+    f"且闭店须先承担剩余租期租金与违约金;"
     f"C 级门店以降租谈判与品类优化为主,3 个月后复评;A 级门店追加资源作为标杆。"
 )
 doc.add_paragraph("执行优先级:")
 for item in [
-    "P0(7 月内):启动满足「租约到期 + 连续 6 个月 D 级」条件的门店闭店评估,测算违约金与释放成本;",
+    f"P0(7 月内):启动满足「租约到期 + 连续 6 个月 D 级」条件的门店({', '.join(d_close.index)})闭店评估,"
+    "测算剩余租期租金、违约金与释放成本;",
     "P0(7 月内):收缩高费用率渠道的低效投放,设定销售费用率下降目标;",
     f"P1(8 月内):对 {wx['渠道名称']} 增投 20%,并同步扩充会员与私域运营;",
     "P1(8 月内):按 H2 节奏表落地促销组合,取消 ROI <1 的活动类型;",
-    "P2(Q3 末):完成 D 级门店转前置仓/自提点试点;",
+    f"P2(Q3 末):完成满足 6.2 条逐月条件的 D 级门店({', '.join(d_conv.index)})转前置仓/自提点试点;",
     "P2(Q4 末):复盘渠道费用结构与会员跨渠道转化,确定 2027 年资源基线。",
 ]:
     doc.add_paragraph(item, style="List Bullet")
 
 doc.add_paragraph("【分析判断】三类执行优先级与实施条件:")
+# 闭店门店的亏损与剩余租期租金(月按 30.44 天折算)
+close_loss_total = -store.loc[d_close.index, "经营收益"].sum()
+close_loss_month = close_loss_total / 6
+close_h1_rent = sum(store.loc[s, "月均租金及物业费"] * 6 for s in d_close.index)
+close_h2_rent = sum(
+    store.loc[s, "月均租金及物业费"] * ((pd.Timestamp(lease[s]["租期结束"]) - BASE_DATE).days / 30.44)
+    for s in d_close.index
+)
+close_penalty = store.loc[d_close.index, "闭店违约金"].sum()
+trans_h1_rent = sum(store.loc[s, "月均租金及物业费"] * 6 for s in d_conv.index)
 prio_rows = [
-    ("P0-1", "可立即执行", "启动 S029、S017 闭店评估", "门店", "停止月均亏损(合计 1,303,618.01 元)与租金支出",
+    ("P0-1", "可立即执行", f"启动 {'、'.join(d_close.index)} 闭店评估", "门店",
+     f"停止亏损:H1 累计亏损 {money(close_loss_total)} 元(月均 {money(close_loss_month)} 元)与相应租金支出",
      "法务确认通知状态;租约自然到期不续约", "S029 通知节点可能已过;员工安置与会员迁移", "授权不续约与处置预算"),
     ("P0-2", "可立即执行", "收缩 CH03、CH05 低效投放并设定费用率目标", "渠道", "释放投放额度,改善费用结构",
      "保留高效活动与会员获取职能", "销售短期回落", "确认渠道费用率下降目标值"),
-    ("P1-1", "需补充核验后执行", "D 级门店转前置仓/自提点(含已为前置仓门店)", "门店", "降低到店模式下的租售比压力",
+    ("P1-1", "需补充核验后执行",
+     f"D 级门店转前置仓/自提点({'、'.join(d_conv.index)};均满足 6.2 条逐月条件)", "门店",
+     "降低到店模式下的租售比压力",
      "房东/业态许可、改造投入、节点容量测算(A-015)", "改造成本未知;容量不足", "确认改造预算与房东许可"),
     ("P1-2", "需补充核验后执行", "C 级门店降租谈判与品类优化", "门店", "修复负经营收益",
-     "需要门店-品类毛利与库存数据(A-011)", "谈判周期与续约条款", "授权降租谈判区间"),
+     "需要门店-品类毛利数据(A-020)与库存、滞销明细数据(A-007);并取得降租谈判授权",
+     "谈判周期与续约条款", "授权降租谈判区间"),
     ("P1-3", "需补充核验后执行", "CH02 增投 20% 并扩充会员运营", "渠道/会员", "放大唯一正净利渠道的贡献",
      "投放到店自提与小程序的承接能力", "投放效率回落", "确认增投额度与考核口径"),
     ("P1-4", "需补充核验后执行", "按 H2 节奏表落地促销组合", "促销", "取消低效活动、保留高效类型",
@@ -847,7 +919,6 @@ h2_low = promo_h1 * (0.12 + 0.10 + 0.14 + 0.16 + 0.22 + 0.18)
 h2_high = promo_h1 * (0.16 + 0.14 + 0.18 + 0.20 + 0.26 + 0.22)
 ch_h1_ad = ch["广告费"].sum()
 ch_h2_ad = (ch["广告费"] * (1 + ch["建议投入幅度"])).sum()
-store_rent_release = store[store["调整建议"].isin(["闭店评估", "转前置仓或自提点"])]["月均租金及物业费"].sum() * 6
 doc.add_paragraph("【建议值】H2 资源再配置对照(金额均为建议值或估算):")
 t5b = doc.add_table(rows=1, cols=5)
 t5b.style = "Light Grid Accent 1"
@@ -857,7 +928,29 @@ for i, h in enumerate(["资源池", "H1 实际(元)", "H2 建议(元)", "差异(
 for row in [
     ("渠道广告投放", money(ch_h1_ad), f"{money(ch_h2_ad)}(建议值)", money(ch_h2_ad - ch_h1_ad), "按逐渠道调整幅度测算,以预算审批为前提"),
     ("促销活动费用", money(promo_h1), f"{money(h2_low)} - {money(h2_high)}(建议值)", f"{money(h2_low - promo_h1)} ~ {money(h2_high - promo_h1)}", "按 H2 六个月节奏表分配比例测算"),
-    ("门店租金(闭店 2 家 + 转型 5 家)", money(store_rent_release), "0(闭店)/ 待评估(转型)", money(-store_rent_release), "仅租金口径的估算,不含改造与腾退成本"),
+    (
+        f"门店租金(闭店评估 {len(d_close)} 家:{'、'.join(d_close.index)})",
+        money(close_h1_rent),
+        f"{money(close_h2_rent)}(剩余租期租金)+ {money(close_penalty)}(违约金)= {money(close_h2_rent + close_penalty)}",
+        money(close_h2_rent + close_penalty - close_h1_rent),
+        "按各店租期剩余月份租金(月按 30.44 天折算)+ 《华东区门店租约汇总.docx》合同违约金测算;"
+        "不含腾退、员工安置与会员迁移成本;租约自然到期不续约",
+    ),
+    (
+        f"门店租金(转前置仓或自提点 {len(d_conv)} 家:{'、'.join(d_conv.index)})",
+        money(trans_h1_rent),
+        "待评估(不低于 0)",
+        "待评估",
+        "四家均以前置仓/自提点形态继续承租,不按全额释放;实际金额取决于面积压缩与租金重议结果,"
+        "须先完成出租方许可与改造投入核验(A-015)",
+    ),
+    (
+        "门店租金(D 级整改候选 1 家:S033)",
+        money(float(store.loc['S033', '月均租金及物业费']) * 6),
+        money(float(store.loc['S033', '月均租金及物业费']) * 6),
+        money(0),
+        "S033 逐月租售比未形成连续 3 个月 >35%(最长 2 个月),不适用 6.2 条转换,租金照常发生,不计入释放测算",
+    ),
 ]:
     cells = t5b.add_row().cells
     for i, v in enumerate(row):
@@ -1077,7 +1170,7 @@ lineage = f"""# 数据血缘与指标口径说明
 | 租售比 | 《2026H1门店经营台账.xlsx》 门店费用.租金及物业费 + 门店月度经营.到店销售额 | 月均租金及物业费 ÷ 月均到店销售额 | 租金口径 = 合同月租金 + 物业费(《渠道与门店管理策略.docx》 第 4.4 条) |
 | 面积是否调整 | 《2026H1门店经营台账.xlsx》 门店基础信息.面积是否调整 | 直接读取 | = 是 的门店坪效口径可能失真,已在《异常与待核清单.xlsx》披露 |
 | 分级(A/B/C/D) | 《渠道与门店管理策略.docx》 第 2.2/2.3 条 | 先按到店坪效定级(A ≥5000、B 2000–5000、C 1000–2000、D <1000);租售比 >35% 直接列 D | 不使用其他自创阈值 |
-| 调整建议(维持/整改/转前置仓或自提点/闭店评估) | 《渠道与门店管理策略.docx》 第 2.5、6.1、6.2、6.4 条 | A/B 级保留、C 级调改;D 级中同时满足"租约在 2026H2 内到期"与"连续 6 个月 D 级"者启动闭店评估,其余转前置仓/自提点评估 | 连续 6 个月 D 级由月度指标逐月判定 |
+| 调整建议(维持/整改/转前置仓或自提点/闭店评估) | 《渠道与门店管理策略.docx》 第 2.5、6.1、6.2、6.4 条 | A/B 级保留、C 级调改;D 级中同时满足"租约在 2026H2 内到期"与"连续 6 个月 D 级"者启动闭店评估;D 级且租售比**连续 3 个月 >35%**者转前置仓或自提点评估;未满足该逐月条件者列 D 级整改候选 | 闭店条件按"连续 6 个月 D 级"逐月判定;转换条件按"连续 3 个月 >35%"逐月判定,不得用半年均值替代(S033 逐月为 52.1%、43.6%、33.0%、54.1%、34.1%、44.4%,最长连续 2 个月,故不转换) |
 | 关键依据(2–3 条材料引用) | 《2026H1门店经营台账.xlsx》/《华东区门店租约汇总.docx》 | 列出该门店的到店销售额、月均租金及物业费、营业面积等回指项 | 每条结论可回指附件字段 |
 | 数据状态(已确认/待补) | 面积是否调整 | = 是 → 待补(坪效口径待确认);否则 已确认 | 待补含义见《异常与待核清单.xlsx》A-002 |
 
