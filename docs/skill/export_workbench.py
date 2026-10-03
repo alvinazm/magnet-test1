@@ -93,12 +93,54 @@ def render_eval_form(ef: dict) -> str:
     return "\n".join(out)
 
 
+def render_eval_summary(ef: dict) -> str:
+    """操作区速览:逐项状态矩阵 + 空证据提示 + B 模块卡控统计。"""
+    out: list[str] = []
+    mb = ef.get("module_b") or {}
+    items = mb.get("items") if isinstance(mb, dict) else mb
+    out.append("\n---\n")
+    out.append("## 操作区速览:逐项状态矩阵\n")
+    out.append("| 编号 | 类型 | 影响程度 | M1 | M2 | M3 | 空证据(满足档可留空) |")
+    out.append("| --- | --- | --- | --- | --- | --- | --- |")
+    stats = []
+    for it in items or []:
+        assess = it.get("model_assessments") or {}
+        status = {m: (a or {}).get("status") or "—" for m, a in assess.items()}
+        empty = [m for m, a in assess.items()
+                 if status[m] == "满足" and not str((a or {}).get("evidence") or "").strip()]
+        missing = [m for m, a in assess.items()
+                   if status[m] in ("不满足", "部分满足") and not str((a or {}).get("evidence") or "").strip()]
+        flag = ("空(合规):" + "、".join(empty) if empty else "")
+        if missing:
+            flag += (";" if flag else "") + "**缺证据(不合规):" + "、".join(missing) + "**"
+        out.append(f"| {it.get('id')} | {it.get('type')} | {it.get('importance')} | "
+                   f"{status.get('M1','—')} | {status.get('M2','—')} | {status.get('M3','—')} | {flag or '—'} |")
+        stats.append((it.get("id"), it.get("importance"), status))
+
+    key = [(i, imp, s) for i, imp, s in stats if imp in ("关键", "重要")]
+    bad2 = [i for i, imp, s in key if sum(1 for v in s.values() if v in ("不满足", "部分满足")) >= 2]
+    bad3 = [i for i, imp, s in key if sum(1 for v in s.values() if v in ("不满足", "部分满足")) == 3]
+    bad1 = [i for i, imp, s in key if sum(1 for v in s.values() if v in ("不满足", "部分满足")) == 1]
+    out.append("\n## B 模块卡控(按平台当前取值统计)\n")
+    out.append(f"- 至少两家未完全满足 ≥10 条:{len(bad2)} 条({'、'.join(bad2)})"
+               f"{'✓' if len(bad2) >= 10 else '✗'}")
+    out.append(f"- 其中三家均未完全满足 ≥6 条:{len(bad3)} 条({'、'.join(bad3)})"
+               f"{'✓' if len(bad3) >= 6 else '✗'}")
+    out.append(f"- 只有一家未完全满足 ≥1 条:{len(bad1)} 条({'、'.join(bad1)})"
+               f"{'✓' if len(bad1) >= 1 else '✗'}")
+    out.append("\n> 影响程度为「一般」的条目(B10)按口径不计入卡控。\n")
+    return "\n".join(out)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", required=True)
     ap.add_argument("--record-id", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--all-records", action="store_true")
+    ap.add_argument("--eval-only", action="store_true",
+                    help="只导出评估页的『评估表操作区』(模块 A 标准文本 + 模块 B 逐项状态/证据 + 模块 H),"
+                         "不导出题包机审报告与 Query")
     args = ap.parse_args()
 
     q = urllib.parse.parse_qs(urllib.parse.urlparse(args.url).query)
@@ -122,6 +164,23 @@ def main() -> int:
     L.append(f"> **抓取方式**:`GET /api/login` → `/api/records` → `/api/record?record_id=…&fresh=1` → `/api/eval?record_id=…`")
     L.append(f"> **凭证**:uuid 已脱敏;原始 JSON 未入库(仅本地 `/tmp`)\n")
     L.append("---\n")
+
+    if args.eval_only:
+        # 只导出评估页的评估表操作区:模块 A 标准文本 + 模块 B 逐项状态与证据 + 模块 H
+        L.append("## 评估表操作区(平台保存版)\n")
+        if ev.get("success"):
+            L.append(f"- 记录状态:{ev.get('task_status')};可编辑:{ev.get('editable')};"
+                     f"模型:{', '.join(ev.get('available_models') or [])}")
+            L.append(f"- 可提交状态:{ev.get('status_allowed')};返修:{json.dumps(ev.get('rework'), ensure_ascii=False)}\n")
+            L.append(render_eval_form(ev.get("eval_form") or {}))
+            L.append(render_eval_summary(ev.get("eval_form") or {}))
+        else:
+            L.append(f"(未能读取评估表:{ev})\n")
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(redact("\n".join(L)), encoding="utf-8")
+        print(f"已导出:{out}({out.stat().st_size/1024:.1f} KB)")
+        return 0
 
     L.append("## 一、工作台概览\n")
     L.append(f"- 页面标题:Magnet 专家工作台;专家:{rec.get('annotator_name')};期次:{rec.get('period')}")
